@@ -37,11 +37,10 @@ export const LastPriceHero = React.memo(function LastPriceHero({
       ? colors.askRed
       : changeColor;
 
-  // Arrow icon and pill color: reflect real-time tick direction when active, falling back to 24h trend
-  const isDownTick = priceDirection === 'down' || (priceDirection === 'neutral' && !isPositive);
-  const badgeColor = isDownTick ? colors.askRed : colors.bidGreen;
-  const badgeStyle = isDownTick ? styles.changeBadgeRed : styles.changeBadgeGreen;
-  const arrowIconName = isDownTick ? 'caret-down' : 'caret-up';
+  // Arrow icon and pill color strictly reflect the 24-hour change trend
+  const badgeColor = isPositive ? colors.bidGreen : colors.askRed;
+  const badgeStyle = isPositive ? styles.changeBadgeGreen : styles.changeBadgeRed;
+  const arrowIconName = isPositive ? 'caret-up' : 'caret-down';
 
   // Flash animation shared value: 0 = transparent, 1 = flash green, 2 = flash red
   const flashAnim = useSharedValue(0);

@@ -62,7 +62,8 @@ export class MetadataService {
     arg3: number,
     arg4: number,
     arg5: number,
-    arg6?: number
+    arg6?: number,
+    arg7?: number
   ): void {
     const existing = this.metadataStore.get(symbol);
     if (!existing) return;
@@ -71,21 +72,28 @@ export class MetadataService {
     let high24h = arg3;
     let low24h = arg4;
     let volume24h = arg5;
+    let explicitChange24h: number | undefined;
 
     if (arg6 !== undefined) {
-      // 6-arg invocation: (symbol, lastPrice, openPrice, high24h, low24h, volume24h)
+      // 6+ arg invocation: (symbol, lastPrice, openPrice, high24h, low24h, volume24h, explicitChange24h?)
       openPrice = arg3;
       high24h = arg4;
       low24h = arg5;
       volume24h = arg6;
+      explicitChange24h = arg7;
     }
 
     if (openPrice > 0) {
       this.openPriceStore.set(symbol, openPrice);
     }
 
-    // True 24-hour price change percentage: ((current - open) / open) * 100
-    const change24h = openPrice > 0 ? ((lastPrice - openPrice) / openPrice) * 100 : 0;
+    // Direct 24-hour price change percentage from Binance ticker (P), or calculated fallback
+    const change24h =
+      explicitChange24h !== undefined
+        ? explicitChange24h
+        : openPrice > 0
+        ? ((lastPrice - openPrice) / openPrice) * 100
+        : 0;
 
     const updated: PairMetadata = {
       ...existing,

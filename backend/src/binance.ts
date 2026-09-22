@@ -24,6 +24,7 @@ export type TickerUpdateHandler = (
     high24h: number;
     low24h: number;
     volume24h: number;
+    change24h?: number;
   }>
 ) => void;
 
@@ -63,7 +64,8 @@ export class BinanceConnector {
     const pairs = Object.keys(SUPPORTED_PAIRS).map((p) => p.toLowerCase());
     const depthStreams = pairs.map((p) => `${p}@depth20@100ms`).join('/');
     const tradeStreams = pairs.map((p) => `${p}@trade`).join('/');
-    const defaultStreamUrl = `wss://stream.binance.com:9443/stream?streams=${depthStreams}/${tradeStreams}/!miniTicker@arr`;
+    const tickerStreams = pairs.map((p) => `${p}@ticker`).join('/');
+    const defaultStreamUrl = `wss://stream.binance.com:9443/stream?streams=${depthStreams}/${tradeStreams}/${tickerStreams}/!miniTicker@arr`;
 
     this.baseUrl = options.baseUrl ?? defaultStreamUrl;
   }
@@ -180,6 +182,42 @@ export class BinanceConnector {
           if (Number.isFinite(price) && price > 0) {
             this.metrics.wsMessagesReceived.inc({ stream: 'trade', symbol: symbolMatch });
             this.onTradeHandler?.(symbolMatch, price, isBuyerMaker);
+          }
+        }
+      }
+
+      // Handle 24h individual ticker updates: e.g. "btcusdt@ticker"
+      if (stream.endsWith('@ticker')) {
+        const symbolMatch = stream.split('@')[0].toUpperCase() as SupportedPairSymbol;
+        if (SUPPORTED_PAIRS[symbolMatch] && payload.data) {
+          const item = payload.data;
+          const lastPrice = Number(item.c);
+          const openPrice = Number(item.o ?? item.c);
+          const high24h = Number(item.h);
+          const low24h = Number(item.l);
+          const volume24h = Number(item.v);
+          const change24h = item.P !== undefined ? Number(item.P) : undefined;
+
+          if (
+            Number.isFinite(lastPrice) &&
+            Number.isFinite(openPrice) &&
+            Number.isFinite(high24h) &&
+            Number.isFinite(low24h) &&
+            Number.isFinite(volume24h) &&
+            lastPrice >= 0
+          ) {
+            this.metrics.wsMessagesReceived.inc({ stream: 'ticker', symbol: symbolMatch });
+            this.onTickerHandler?.([
+              {
+                symbol: symbolMatch,
+                lastPrice,
+                openPrice,
+                high24h,
+                low24h,
+                volume24h,
+                change24h,
+              },
+            ]);
           }
         }
       }

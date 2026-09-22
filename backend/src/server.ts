@@ -31,7 +31,8 @@ async function main() {
           update.openPrice,
           update.high24h,
           update.low24h,
-          update.volume24h
+          update.volume24h,
+          update.change24h
         );
       }
     })
