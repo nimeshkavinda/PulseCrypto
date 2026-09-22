@@ -1,13 +1,16 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import { WebSocket } from 'ws';
 import { defaultMetadataService, MetadataService } from './metadata.js';
 import { defaultMetrics, MetricsRegistry } from './metrics.js';
+import { defaultConflator, ConflationEngine } from './conflator.js';
 
 export interface AppOptions {
   enableLogger?: boolean;
   metadataService?: MetadataService;
   metricsRegistry?: MetricsRegistry;
+  conflationEngine?: ConflationEngine;
 }
 
 /**
@@ -19,6 +22,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   const shouldLog = options.enableLogger ?? isDev;
   const metadata = options.metadataService ?? defaultMetadataService;
   const metrics = options.metricsRegistry ?? defaultMetrics;
+  const conflator = options.conflationEngine ?? defaultConflator;
 
   const app = Fastify({
     logger: shouldLog
@@ -43,6 +47,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       status: 'ok',
       uptime: process.uptime(),
       timestamp: Date.now(),
+      clientsConnected: conflator.getConnectedClientCount(),
     };
   });
 
@@ -56,6 +61,18 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     reply.header('Content-Type', metrics.getContentType());
     return metrics.getMetrics();
   });
+
+  type WebSocketConnection = WebSocket | { socket: WebSocket };
+
+  const wsRouteHandler = (connection: WebSocketConnection) => {
+    const socket: WebSocket = 'socket' in connection ? connection.socket : connection;
+    conflator.handleConnection(socket);
+  };
+
+  const wsOptions = { websocket: true } as unknown as Parameters<typeof app.get>[1];
+
+  app.get('/ws', wsOptions, wsRouteHandler as unknown as Parameters<typeof app.get>[2]);
+  app.get('/stream', wsOptions, wsRouteHandler as unknown as Parameters<typeof app.get>[2]);
 
   return app;
 }
