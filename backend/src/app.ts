@@ -69,10 +69,16 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     conflator.handleConnection(socket);
   };
 
-  const wsOptions = { websocket: true } as unknown as Parameters<typeof app.get>[1];
+  const registerWs = (path: string) => {
+    (app as unknown as { get: (p: string, opts: object, handler: (c: WebSocketConnection) => void) => void }).get(
+      path,
+      { websocket: true },
+      wsRouteHandler
+    );
+  };
 
-  app.get('/ws', wsOptions, wsRouteHandler as unknown as Parameters<typeof app.get>[2]);
-  app.get('/stream', wsOptions, wsRouteHandler as unknown as Parameters<typeof app.get>[2]);
+  registerWs('/ws');
+  registerWs('/stream');
 
   return app;
 }
