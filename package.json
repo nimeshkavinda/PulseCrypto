@@ -9,9 +9,7 @@
     "mobile"
   ],
   "scripts": {
-    "dev": "concurrently -k --names \"backend,mobile\" -c \"blue.bold,magenta.bold\" \"npm:dev:backend\" \"npm:dev:mobile\"",
-    "dev:docker": "concurrently -k --names \"docker-be,mobile\" -c \"cyan.bold,magenta.bold\" \"docker compose up --build\" \"npm:dev:mobile\"",
-    "dev:backend": "npm --prefix backend run dev",
+    "dev:backend": "docker compose up --build",
     "dev:mobile": "npm --prefix mobile start",
     "build:shared": "npm --prefix shared run build",
     "build:backend": "npm --prefix backend run build",
@@ -20,9 +18,7 @@
     "test:mobile": "npm --prefix mobile run test",
     "test": "npm run test:shared && npm run test:backend && npm run test:mobile",
     "typecheck": "npm --prefix shared run typecheck && npm --prefix backend run typecheck && npm --prefix mobile run typecheck",
-    "lint": "eslint shared backend mobile",
-    "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down"
+    "lint": "eslint shared backend mobile"
   },
   "keywords": [
     "cryptocurrency",

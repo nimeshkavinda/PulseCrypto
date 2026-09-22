@@ -18,74 +18,76 @@ Real-time cryptocurrency market streaming platform. A Fastify WebSocket gateway 
 
 ## Prerequisites
 
-- **Docker** (Docker Desktop for macOS)
-- **Node.js v24** (see `.nvmrc`) — only needed for the mobile Expo CLI
-- **Android Studio** with an Android Emulator AVD configured (or Expo Go on a physical device)
+- **Docker** (Docker Desktop running)
+- **Node.js v24** (see `.nvmrc`)
+- **Android Studio** (Android emulator) and/or **Xcode** (iOS simulator)
+
+> [!TIP]
+> **macOS iOS Simulator Setup**: If `xcrun simctl` complains that developer tools are missing, point `xcode-select` to your installed Xcode:
+> ```bash
+> sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+> ```
 
 ---
 
 ## Quick Start (Reviewer Flow)
 
-Run everything from the **repo root** — no `cd` required.
+Run everything from the **repository root** — no `cd` needed.
 
-### Step 1: Install Dependencies
+### 1. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### Step 2: Start the Backend (Docker) + Mobile (Expo) Together
+### 2. Start the Backend (Terminal 1)
 
 ```bash
-npm run dev:docker
+npm run dev:backend
 ```
 
-This single command:
-- Builds and starts the Fastify backend inside Docker on port `8080` (connects to live Binance streams)
-- Starts the Expo Metro bundler for the mobile app
-- Logs are color-prefixed (`[docker-be]` / `[mobile]`) in one terminal
-- `Ctrl-C` cleanly stops both
+This builds and runs the Fastify backend inside Docker on port `8080`, connected to live Binance order books and ticker feeds.
 
-### Step 3: Launch the App
+### 3. Start the Mobile Terminal (Terminal 2)
 
-Once you see the Expo QR code in the terminal:
-
-| Target | Key / Command | Gateway URL (auto-detected) |
-|---|---|---|
-| **Android Emulator** | Press **`a`** | `ws://10.0.2.2:8080/ws` |
-| **iOS Simulator** | Press **`i`** | `ws://localhost:8080/ws` |
-| **Physical Device (Expo Go)** | Scan QR code | Set `EXPO_PUBLIC_GATEWAY_URL=ws://<your-lan-ip>:8080/ws` before starting |
-
-The gateway URL is **automatically detected per platform** — no manual configuration needed for emulators/simulators.
-
----
-
-## Running Backend and Mobile Separately (Two Terminals)
-
-If you prefer separate terminals:
-
-**Terminal 1 — Backend (Docker):**
-```bash
-npm run docker:up
-```
-
-**Terminal 2 — Mobile (Expo):**
 ```bash
 npm run dev:mobile
 ```
-Then press `a` (Android), `i` (iOS), or scan QR (physical device).
+
+Once the interactive Expo terminal appears:
+
+| Target | Key / Action | Gateway URL (auto-detected) |
+|---|---|---|
+| **Android Emulator** | Press **`a`** | `ws://10.0.2.2:8080/ws` |
+| **iOS Simulator** | Press **`i`** | `ws://localhost:8080/ws` |
+| **Physical Device** | Scan QR code with Expo Go | See below for LAN IP setup |
+
+The gateway URL is **automatically detected per platform** — zero configuration required for emulators and simulators.
+
+---
+
+## Physical Device (Expo Go over Wi-Fi)
+
+To stream to a physical device on your local Wi-Fi:
+
+1. Find your machine's LAN IP: `ipconfig getifaddr en0`
+2. Start the mobile server with the gateway override:
+   ```bash
+   EXPO_PUBLIC_GATEWAY_URL=ws://<your-lan-ip>:8080/ws npm run dev:mobile
+   ```
+3. Scan the terminal QR code with **Expo Go**.
 
 ---
 
 ## Verifying the Backend
 
-Once the backend is running (via Docker), verify from any terminal:
+Once `npm run dev:backend` is up, verify health and live ingestion from any terminal:
 
 ```bash
-# Health check
+# Health check & uptime
 curl -s http://localhost:8080/health | jq .
 
-# Live market metadata (prices from Binance)
+# Live market metadata (prices & 24h stats from Binance)
 curl -s http://localhost:8080/pairs/meta | jq .
 
 # Prometheus metrics
@@ -94,30 +96,14 @@ curl -s http://localhost:8080/metrics
 
 ---
 
-## Physical Device (Expo Go over Wi-Fi)
+## Repository Commands
 
-To run on a physical device instead of an emulator:
-
-1. Find your LAN IP: `ipconfig getifaddr en0`
-2. Start with the gateway URL override:
-   ```bash
-   EXPO_PUBLIC_GATEWAY_URL=ws://<your-lan-ip>:8080/ws npm run dev:docker
-   ```
-3. Scan the QR code in the terminal with **Expo Go** on your phone.
-
----
-
-## All Commands
-
-All commands run from the repo root.
+All commands run from the monorepo root:
 
 | Command | Description |
 |---|---|
-| `npm run dev:docker` | Start Docker backend + Expo mobile concurrently (recommended) |
-| `npm run docker:up` | Start backend in Docker only |
-| `npm run docker:down` | Stop Docker backend |
-| `npm run dev:mobile` | Start Expo mobile dev server only |
-| `npm run dev` | Start local `tsx watch` backend + Expo mobile (for backend code iteration) |
-| `npm test` | Run all unit tests (shared + backend + mobile) |
-| `npm run typecheck` | TypeScript type-check all workspaces |
-| `npm run lint` | ESLint all workspaces |
+| `npm run dev:backend` | Build and start backend inside Docker (`:8080`) |
+| `npm run dev:mobile` | Start Expo mobile Metro development server |
+| `npm test` | Run all test suites (shared, backend, mobile) |
+| `npm run typecheck` | TypeScript type-check across all workspaces |
+| `npm run lint` | ESLint across all workspaces |

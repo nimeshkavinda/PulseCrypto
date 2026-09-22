@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { StorageRepository, DEFAULT_FAVORITES, DEFAULT_THROTTLE_MS } from '../src/storage/storageRepository.js';
+import { StorageRepository, DEFAULT_FAVORITES, DEFAULT_THROTTLE_MS } from '../src/storage/storageRepository';
 
 describe('StorageRepository Synchronous Persistence (Task T3.4)', () => {
   let storage: StorageRepository;

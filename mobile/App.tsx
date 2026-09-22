@@ -3,8 +3,8 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
-import { RootNavigator } from './src/navigation/RootNavigator.js';
-import { colors } from './src/theme/tokens.js';
+import { RootNavigator } from './src/navigation/RootNavigator';
+import { colors } from './src/theme/tokens';
 
 const navigationTheme = {
   ...DarkTheme,

@@ -1,9 +1,9 @@
 import React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import { RootDrawerParamList } from './types.js';
-import { MainTabNavigator } from './MainTabNavigator.js';
-import { ProTraderDrawerContent } from './drawer/ProTraderDrawerContent.js';
-import { colors } from '../theme/tokens.js';
+import { RootDrawerParamList } from './types';
+import { MainTabNavigator } from './MainTabNavigator';
+import { ProTraderDrawerContent } from './drawer/ProTraderDrawerContent';
+import { colors } from '../theme/tokens';
 
 const Drawer = createDrawerNavigator<RootDrawerParamList>();
 

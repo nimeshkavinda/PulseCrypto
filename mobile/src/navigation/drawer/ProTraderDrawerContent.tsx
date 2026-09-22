@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing, borderRadius } from '../../theme/tokens.js';
+import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
 interface DrawerMenuItem {
   icon: keyof typeof Ionicons.glyphMap;

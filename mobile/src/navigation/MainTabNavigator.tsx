@@ -4,12 +4,12 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomTabParamList, RootDrawerParamList } from './types.js';
-import { TerminalScreen } from '../screens/TerminalScreen.js';
-import { MarketsScreen } from '../screens/MarketsScreen.js';
-import { TelemetryScreen } from '../screens/TelemetryScreen.js';
-import { SettingsScreen } from '../screens/SettingsScreen.js';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens.js';
+import { BottomTabParamList, RootDrawerParamList } from './types';
+import { TerminalScreen } from '../screens/TerminalScreen';
+import { MarketsScreen } from '../screens/MarketsScreen';
+import { TelemetryScreen } from '../screens/TelemetryScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
+import { colors, typography, spacing, borderRadius } from '../theme/tokens';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 

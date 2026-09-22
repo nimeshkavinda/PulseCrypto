@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { colors, typography, spacing, borderRadius } from '../src/theme/tokens.js';
+import { colors, typography, spacing, borderRadius } from '../src/theme/tokens';
 
 describe('Design System Tokens (Task T3.2)', () => {
   it('should match Mockup 1 canonical brand colors', () => {

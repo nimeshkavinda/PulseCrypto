@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens.js';
+import { colors, typography, spacing, borderRadius } from '../theme/tokens';
 
 export function MarketsScreen() {
   return (
