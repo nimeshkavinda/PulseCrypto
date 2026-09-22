@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   RefreshControl,
   SafeAreaView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -14,6 +15,8 @@ import { PairMetadata } from '@pulsecrypto/shared';
 import { colors, typography, spacing, borderRadius } from '../theme/tokens';
 import { usePairsMetadata } from '../hooks/usePairsMetadata';
 import { MarketPairCard } from './watchlist/MarketPairCard';
+import { MarketFilterBar } from './watchlist/MarketFilterBar';
+import { filterAndSortPairs, MarketFilterTab } from './watchlist/filterUtils';
 import { defaultStorage } from '../storage/storageRepository';
 import type { BottomTabParamList } from '../navigation/types';
 
@@ -21,6 +24,8 @@ export function MarketsScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<BottomTabParamList, 'Markets'>>();
   const { data: pairs, isRefetching, refetch, isLoading } = usePairsMetadata();
   const [favorites, setFavorites] = useState<string[]>(() => defaultStorage.getFavorites());
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<MarketFilterTab>('ALL');
 
   // Synchronize favorites from storage on mount
   useEffect(() => {
@@ -40,6 +45,11 @@ export function MarketsScreen() {
     [navigation]
   );
 
+  const displayedPairs = useMemo(
+    () => filterAndSortPairs(pairs, searchQuery, activeTab, favorites),
+    [pairs, searchQuery, activeTab, favorites]
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: PairMetadata }) => (
       <MarketPairCard
@@ -54,6 +64,57 @@ export function MarketsScreen() {
 
   const keyExtractor = useCallback((item: PairMetadata) => item.symbol, []);
 
+  const renderEmptyComponent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={colors.bidGreen} />
+          <Text style={styles.emptyText}>Loading markets...</Text>
+        </View>
+      );
+    }
+
+    if (activeTab === 'FAVORITES' && favorites.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>No Favourites Yet</Text>
+          <Text style={styles.emptyText}>
+            Tap the star icon on any pair to add it to your favourites watchlist.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={() => setActiveTab('ALL')}
+          >
+            <Text style={styles.emptyButtonText}>View All Pairs</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (searchQuery.trim().length > 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>No Matching Pairs</Text>
+          <Text style={styles.emptyText}>
+            No results found for &ldquo;{searchQuery}&rdquo;.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={() => setSearchQuery('')}
+          >
+            <Text style={styles.emptyButtonText}>Clear Search</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No trading pairs available</Text>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header Bar */}
@@ -61,7 +122,7 @@ export function MarketsScreen() {
         <View>
           <Text style={styles.headerTitle}>Markets Watchlist</Text>
           <Text style={styles.headerSubtitle}>
-            {pairs.length} supported pairs streaming live
+            {displayedPairs.length} of {pairs.length} pairs
           </Text>
         </View>
 
@@ -73,12 +134,22 @@ export function MarketsScreen() {
         )}
       </View>
 
+      {/* Search and Filter Tabs */}
+      <MarketFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        favoritesCount={favorites.length}
+      />
+
       {/* Main Pair List */}
       <FlatList
-        data={pairs}
+        data={displayedPairs}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -88,18 +159,7 @@ export function MarketsScreen() {
             progressBackgroundColor={colors.surface}
           />
         }
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.emptyContainer}>
-              <ActivityIndicator size="large" color={colors.bidGreen} />
-              <Text style={styles.emptyText}>Loading markets...</Text>
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No trading pairs available</Text>
-            </View>
-          )
-        }
+        ListEmptyComponent={renderEmptyComponent}
       />
     </SafeAreaView>
   );
@@ -153,10 +213,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.xxxl,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.fontSize.subtitle,
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.xs,
   },
   emptyText: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.body,
+    textAlign: 'center',
+    lineHeight: typography.lineHeight.body,
+  },
+  emptyButton: {
     marginTop: spacing.md,
+    backgroundColor: colors.surfaceElevated,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  emptyButtonText: {
+    color: colors.bidGreen,
+    fontSize: typography.fontSize.caption,
+    fontWeight: typography.fontWeight.semiBold,
   },
 });
