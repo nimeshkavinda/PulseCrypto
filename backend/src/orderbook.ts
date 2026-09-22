@@ -17,6 +17,7 @@ interface OrderBookState {
   bids: RawDepthLevel[];
   asks: RawDepthLevel[];
   lastUpdateTimestamp: number;
+  lastTradePrice?: number;
 }
 
 export class OrderBookManager {
@@ -87,6 +88,15 @@ export class OrderBookManager {
   }
 
   /**
+   * Ingest real-time trade price from Binance @trade stream
+   */
+  public updateLastTrade(symbol: SupportedPairSymbol, price: number): void {
+    const book = this.books.get(symbol);
+    if (!book || !Number.isFinite(price) || price <= 0) return;
+    book.lastTradePrice = price;
+  }
+
+  /**
    * Build full conflated MarketUpdatePayload with derived analytics
    */
   public getSnapshot(symbol: SupportedPairSymbol): MarketUpdatePayload {
@@ -94,7 +104,7 @@ export class OrderBookManager {
     const meta = this.metadataService.get(symbol);
 
     const now = Date.now();
-    const lastPrice = meta?.lastPrice ?? 100.0;
+    const lastPrice = book?.lastTradePrice ?? meta?.lastPrice ?? 100.0;
     const high24h = meta?.high24h ?? lastPrice * 1.05;
     const low24h = meta?.low24h ?? lastPrice * 0.95;
     const volume24h = meta?.volume24h ?? 1000.0;
@@ -120,6 +130,16 @@ export class OrderBookManager {
     const bestBid = bids[0]?.[0] ?? lastPrice;
     const bestAsk = asks[0]?.[0] ?? lastPrice;
 
+    // Ensure effective price is synchronized with active order book spread
+    let effectivePrice = lastPrice;
+    if (bids[0]?.[0] && asks[0]?.[0]) {
+      if (effectivePrice < bids[0][0]) {
+        effectivePrice = bids[0][0];
+      } else if (effectivePrice > asks[0][0]) {
+        effectivePrice = asks[0][0];
+      }
+    }
+
     // Spread
     const spread = Math.max(Number((bestAsk - bestBid).toFixed(meta?.priceDecimals ?? 2)), 0);
     const spreadPct = bestBid > 0 ? Number(((spread / bestBid) * 100).toFixed(4)) : 0;
@@ -138,7 +158,7 @@ export class OrderBookManager {
     const payload: MarketUpdatePayload = {
       pair: symbol,
       timestamp: now,
-      price: lastPrice,
+      price: effectivePrice,
       change24h,
       high24h,
       low24h,

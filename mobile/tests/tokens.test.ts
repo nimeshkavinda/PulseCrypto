@@ -38,3 +38,18 @@ describe('Design System Tokens (Task T3.2)', () => {
     expect(borderRadius.pill).toBe(9999);
   });
 });
+
+describe('Financial Formatters', () => {
+  it('should format realistic market caps matching Mockup 3', async () => {
+    const { formatMarketCap } = await import('../src/utils/formatters');
+    expect(formatMarketCap('BTCUSDT', 64238.17)).toBe('1.3T');
+    expect(formatMarketCap('BTCUSDT', 86525.22)).toBe('1.7T');
+    expect(formatMarketCap('ETHUSDT', 3500)).toBe('421.4B');
+    expect(formatMarketCap('SOLUSDT', 150)).toBe('70.2B');
+    expect(formatMarketCap('DOGEUSDT', 0.15)).toBe('21.9B');
+    expect(formatMarketCap('XRPUSDT', 0.55)).toBe('30.8B');
+    expect(formatMarketCap('BTCUSDT', 0)).toBe('0.00');
+    expect(formatMarketCap('BTCUSDT', NaN)).toBe('0.00');
+  });
+});
+

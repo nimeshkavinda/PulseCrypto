@@ -58,14 +58,31 @@ export class MetadataService {
   public updateFromMiniTicker(
     symbol: SupportedPairSymbol,
     lastPrice: number,
-    high24h: number,
-    low24h: number,
-    volume24h: number
+    arg3: number,
+    arg4: number,
+    arg5: number,
+    arg6?: number,
+    arg7?: number
   ): void {
     const existing = this.metadataStore.get(symbol);
     if (!existing) return;
 
-    const change24h = low24h > 0 ? ((lastPrice - low24h) / low24h) * 100 : 0;
+    let high24h = arg3;
+    let low24h = arg4;
+    let volume24h = arg5;
+    let explicitChange24h: number | undefined;
+
+    if (arg6 !== undefined) {
+      // 6+ arg invocation: (symbol, lastPrice, openPrice, high24h, low24h, volume24h, explicitChange24h?)
+      high24h = arg4;
+      low24h = arg5;
+      volume24h = arg6;
+      explicitChange24h = arg7;
+    }
+
+    // Strictly use whatever given by Binance directly without any custom calculation
+    const change24h =
+      explicitChange24h !== undefined ? explicitChange24h : existing.change24h;
 
     const updated: PairMetadata = {
       ...existing,
@@ -77,6 +94,21 @@ export class MetadataService {
     };
 
     this.metadataStore.set(symbol, updated);
+  }
+
+  /**
+   * Update real-time last trade price immediately from Binance @trade stream
+   */
+  public updateTradePrice(symbol: SupportedPairSymbol, price: number): void {
+    const existing = this.metadataStore.get(symbol);
+    if (!existing || !Number.isFinite(price) || price <= 0) return;
+
+    this.metadataStore.set(symbol, {
+      ...existing,
+      lastPrice: price,
+      high24h: Math.max(existing.high24h, price),
+      low24h: Math.min(existing.low24h, price),
+    });
   }
 
   /**

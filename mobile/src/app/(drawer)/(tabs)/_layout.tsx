@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { TouchableOpacity, View, Text } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,9 +7,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../../../theme/tokens';
 import { styles } from '../../../components/navigation/TabBar.styles';
 
+import { HeaderStatusPill } from '../../../components/navigation/HeaderStatusPill';
+import { useMarketStream } from '../../../hooks/useMarketStream';
+import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
+
 export default function TabLayout() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { activePair } = useMarketStream();
+
+  const pairDisplayName = SUPPORTED_PAIRS[activePair]?.displayName || 'BTC/USDT';
 
   const renderHeaderLeft = () => (
     <TouchableOpacity
@@ -20,16 +27,14 @@ export default function TabLayout() {
       accessibilityRole="button"
       accessibilityLabel="Open navigation menu"
     >
-      <Ionicons name="menu-outline" size={24} color={colors.textPrimary} />
+      <Ionicons name="menu" size={24} color={colors.bidGreen} />
     </TouchableOpacity>
   );
 
-  const renderHeaderRight = () => (
-    <View style={styles.statusPill}>
-      <View style={styles.liveDot} />
-      <Text style={styles.statusPillText}>LIVE</Text>
-    </View>
-  );
+  const { connectionStatus } = useMarketStream();
+  const isConnected = connectionStatus === 'CONNECTED';
+  const statusColor = isConnected ? colors.bidGreen : connectionStatus === 'DISCONNECTED' ? colors.askRed : '#F59E0B';
+  const statusLabel = isConnected ? 'CONNECTED' : connectionStatus;
 
   return (
     <Tabs
@@ -44,11 +49,10 @@ export default function TabLayout() {
         headerTitleStyle: {
           color: colors.textPrimary,
           fontSize: typography.fontSize.subtitle,
-          fontWeight: typography.fontWeight.bold,
           fontFamily: typography.fontFamily.heading,
         },
         headerLeft: renderHeaderLeft,
-        headerRight: renderHeaderRight,
+        headerRight: () => <HeaderStatusPill />,
         headerTitleAlign: 'center',
         tabBarStyle: {
           backgroundColor: colors.surface,
@@ -62,7 +66,6 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: {
           fontSize: typography.fontSize.caption,
-          fontWeight: typography.fontWeight.medium,
           fontFamily: typography.fontFamily.medium,
         },
       }}
@@ -70,7 +73,56 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Terminal',
+          headerTitleAlign: 'left',
+          headerTitle: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typography.fontSize.subtitle,
+                  fontFamily: typography.fontFamily.heading,
+                  marginRight: 8,
+                }}
+              >
+                {pairDisplayName}
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isConnected ? 'rgba(0, 197, 122, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                  paddingHorizontal: 7,
+                  paddingVertical: 3,
+                  borderRadius: 10,
+                }}
+              >
+                <View
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: statusColor,
+                    marginRight: 4,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: statusColor,
+                    fontSize: 10,
+                    fontFamily: typography.fontFamily.monoBold,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {statusLabel}
+                </Text>
+              </View>
+            </View>
+          ),
+          headerRight: () => (
+            <View style={{ marginRight: 16 }}>
+              <Ionicons name="radio" size={20} color={statusColor} />
+            </View>
+          ),
           tabBarLabel: 'Terminal',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="stats-chart-outline" size={size} color={color} />

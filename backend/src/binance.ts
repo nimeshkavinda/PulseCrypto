@@ -20,13 +20,21 @@ export type TickerUpdateHandler = (
   updates: Array<{
     symbol: SupportedPairSymbol;
     lastPrice: number;
+    openPrice: number;
     high24h: number;
     low24h: number;
     volume24h: number;
+    change24h?: number;
   }>
 ) => void;
 
 export type StatusChangeHandler = (connected: boolean) => void;
+
+export type TradeUpdateHandler = (
+  symbol: SupportedPairSymbol,
+  price: number,
+  isBuyerMaker: boolean
+) => void;
 
 export class BinanceConnector {
   private ws: WebSocket | null = null;
@@ -44,6 +52,7 @@ export class BinanceConnector {
 
   private onDepthHandler: DepthUpdateHandler | null = null;
   private onTickerHandler: TickerUpdateHandler | null = null;
+  private onTradeHandler: TradeUpdateHandler | null = null;
   private onStatusHandler: StatusChangeHandler | null = null;
 
   constructor(options: BinanceConnectorOptions = {}) {
@@ -54,7 +63,9 @@ export class BinanceConnector {
 
     const pairs = Object.keys(SUPPORTED_PAIRS).map((p) => p.toLowerCase());
     const depthStreams = pairs.map((p) => `${p}@depth20@100ms`).join('/');
-    const defaultStreamUrl = `wss://stream.binance.com:9443/stream?streams=${depthStreams}/!miniTicker@arr`;
+    const tradeStreams = pairs.map((p) => `${p}@trade`).join('/');
+    const tickerStreams = pairs.map((p) => `${p}@ticker`).join('/');
+    const defaultStreamUrl = `wss://stream.binance.com:9443/stream?streams=${depthStreams}/${tradeStreams}/${tickerStreams}/!miniTicker@arr`;
 
     this.baseUrl = options.baseUrl ?? defaultStreamUrl;
   }
@@ -66,6 +77,11 @@ export class BinanceConnector {
 
   public onTicker(handler: TickerUpdateHandler): this {
     this.onTickerHandler = handler;
+    return this;
+  }
+
+  public onTrade(handler: TradeUpdateHandler): this {
+    this.onTradeHandler = handler;
     return this;
   }
 
@@ -157,11 +173,61 @@ export class BinanceConnector {
         }
       }
 
+      // Handle real-time trade updates: e.g. "btcusdt@trade"
+      if (stream.includes('@trade')) {
+        const symbolMatch = stream.split('@')[0].toUpperCase() as SupportedPairSymbol;
+        if (SUPPORTED_PAIRS[symbolMatch] && payload.data) {
+          const price = Number(payload.data.p);
+          const isBuyerMaker = Boolean(payload.data.m);
+          if (Number.isFinite(price) && price > 0) {
+            this.metrics.wsMessagesReceived.inc({ stream: 'trade', symbol: symbolMatch });
+            this.onTradeHandler?.(symbolMatch, price, isBuyerMaker);
+          }
+        }
+      }
+
+      // Handle 24h individual ticker updates: e.g. "btcusdt@ticker"
+      if (stream.endsWith('@ticker')) {
+        const symbolMatch = stream.split('@')[0].toUpperCase() as SupportedPairSymbol;
+        if (SUPPORTED_PAIRS[symbolMatch] && payload.data) {
+          const item = payload.data;
+          const lastPrice = Number(item.c);
+          const openPrice = Number(item.o ?? item.c);
+          const high24h = Number(item.h);
+          const low24h = Number(item.l);
+          const volume24h = Number(item.v);
+          const change24h = item.P !== undefined ? Number(item.P) : undefined;
+
+          if (
+            Number.isFinite(lastPrice) &&
+            Number.isFinite(openPrice) &&
+            Number.isFinite(high24h) &&
+            Number.isFinite(low24h) &&
+            Number.isFinite(volume24h) &&
+            lastPrice >= 0
+          ) {
+            this.metrics.wsMessagesReceived.inc({ stream: 'ticker', symbol: symbolMatch });
+            this.onTickerHandler?.([
+              {
+                symbol: symbolMatch,
+                lastPrice,
+                openPrice,
+                high24h,
+                low24h,
+                volume24h,
+                change24h,
+              },
+            ]);
+          }
+        }
+      }
+
       // Handle 24h miniTicker updates: "!miniTicker@arr"
       if (stream === '!miniTicker@arr' && Array.isArray(payload.data)) {
         const validUpdates: Array<{
           symbol: SupportedPairSymbol;
           lastPrice: number;
+          openPrice: number;
           high24h: number;
           low24h: number;
           volume24h: number;
@@ -171,6 +237,7 @@ export class BinanceConnector {
           const symbol = item.s as SupportedPairSymbol;
           if (SUPPORTED_PAIRS[symbol]) {
             const lastPrice = Number(item.c);
+            const openPrice = Number(item.o ?? item.c);
             const high24h = Number(item.h);
             const low24h = Number(item.l);
             const volume24h = Number(item.v);
@@ -178,10 +245,12 @@ export class BinanceConnector {
             // Drop entire item if c/h/l/v not finite; never propagate NaN to metadata
             if (
               Number.isFinite(lastPrice) &&
+              Number.isFinite(openPrice) &&
               Number.isFinite(high24h) &&
               Number.isFinite(low24h) &&
               Number.isFinite(volume24h) &&
               lastPrice >= 0 &&
+              openPrice >= 0 &&
               high24h >= 0 &&
               low24h >= 0 &&
               volume24h >= 0
@@ -189,6 +258,7 @@ export class BinanceConnector {
               validUpdates.push({
                 symbol,
                 lastPrice,
+                openPrice,
                 high24h,
                 low24h,
                 volume24h,

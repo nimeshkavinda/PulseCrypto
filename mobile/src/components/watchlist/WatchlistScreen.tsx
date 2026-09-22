@@ -21,10 +21,20 @@ import { styles } from './WatchlistScreen.styles';
 
 export function WatchlistScreen() {
   const router = useRouter();
-  const { data: pairs, isRefetching, refetch, isLoading } = usePairsMetadata();
+  const { data: pairs, refetch, isLoading } = usePairsMetadata();
   const [favorites, toggleFavorite] = useFavorites();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<MarketFilterTab>('ALL');
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsManualRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  }, [refetch]);
 
   const handleSelectPair = useCallback(
     (symbol: string) => {
@@ -124,8 +134,8 @@ export function WatchlistScreen() {
         ListEmptyComponent={renderEmptyComponent}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
+            refreshing={isManualRefreshing}
+            onRefresh={handleRefresh}
             tintColor={colors.bidGreen}
             colors={[colors.bidGreen]}
           />

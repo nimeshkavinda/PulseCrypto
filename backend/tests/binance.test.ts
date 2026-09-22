@@ -106,9 +106,9 @@ describe('BinanceConnector Ingestion & Resiliency (Task T2.2)', () => {
     const tickerPayload = {
       stream: '!miniTicker@arr',
       data: [
-        { s: 'BTCUSDT', c: '64500.0', h: '65000.0', l: '63000.0', v: '2500.0' },
-        { s: 'ETHUSDT', c: '3500.0', h: '3600.0', l: '3400.0', v: '15000.0' },
-        { s: 'IGNOREME', c: '1.0', h: '2.0', l: '0.5', v: '100.0' },
+        { s: 'BTCUSDT', c: '64500.0', o: '64000.0', h: '65000.0', l: '63000.0', v: '2500.0' },
+        { s: 'ETHUSDT', c: '3500.0', o: '3600.0', h: '3600.0', l: '3400.0', v: '15000.0' },
+        { s: 'IGNOREME', c: '1.0', o: '1.0', h: '2.0', l: '0.5', v: '100.0' },
       ],
     };
 
@@ -119,6 +119,7 @@ describe('BinanceConnector Ingestion & Resiliency (Task T2.2)', () => {
     expect(tickerUpdates[0]).toEqual({
       symbol: 'BTCUSDT',
       lastPrice: 64500.0,
+      openPrice: 64000.0,
       high24h: 65000.0,
       low24h: 63000.0,
       volume24h: 2500.0,

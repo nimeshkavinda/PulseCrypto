@@ -53,7 +53,6 @@ export const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: typography.fontSize.caption,
-    fontWeight: typography.fontWeight.semiBold,
     fontFamily: typography.fontFamily.semiBold,
   },
   chipTextActive: {
@@ -76,7 +75,6 @@ export const styles = StyleSheet.create({
   },
   chipBadgeText: {
     fontSize: 9,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.monoBold,
   },
   chipBadgeTextActive: {

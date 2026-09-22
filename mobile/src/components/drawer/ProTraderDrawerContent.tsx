@@ -12,8 +12,14 @@ export function ProTraderDrawerContent() {
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 24) }]}>
-      {/* Header: Pro Trader Identity (Mockup 3) */}
-      <View style={styles.header}>
+      {/* Header: Pro Trader Identity (Click to return to Terminal) */}
+      <TouchableOpacity
+        style={styles.header}
+        activeOpacity={0.7}
+        onPress={() => router.navigate('/')}
+        accessibilityRole="button"
+        accessibilityLabel="Return to Pro Terminal"
+      >
         <View style={styles.avatarRow}>
           <View style={styles.avatar}>
             <Ionicons name="person" size={22} color={colors.bidGreen} />
@@ -25,10 +31,36 @@ export function ProTraderDrawerContent() {
             </Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Menu Options */}
       <ScrollView style={styles.menuContainer} showsVerticalScrollIndicator={false}>
+        {/* MAIN NAVIGATION Section */}
+        <Text style={styles.sectionLabel}>MAIN APP</Text>
+        <TouchableOpacity
+          style={styles.menuItem}
+          activeOpacity={0.7}
+          onPress={() => router.navigate('/')}
+        >
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="stats-chart" size={20} color={colors.bidGreen} />
+            <Text style={[styles.menuItemText, { color: colors.bidGreen }]}>Pro Terminal</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.bidGreen} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          activeOpacity={0.7}
+          onPress={() => router.navigate('/markets')}
+        >
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="list" size={20} color={colors.textSecondary} />
+            <Text style={styles.menuItemText}>Markets Watchlist</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+
         {/* ACCOUNT Section */}
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <TouchableOpacity

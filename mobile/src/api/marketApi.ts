@@ -85,27 +85,11 @@ export const BASELINE_PAIRS_METADATA: PairMetadata[] = [
 
 const PairsMetadataArraySchema = z.array(PairMetadataSchema);
 
-/**
- * Translate WebSocket or raw HTTP gateway URL into a clean HTTP base URL:
- * e.g., 'ws://10.0.2.2:8080/ws' -> 'http://10.0.2.2:8080'
- *       'wss://api.example.com/ws' -> 'https://api.example.com'
- */
+import { resolveHttpBaseUrl as coreResolveHttpBaseUrl } from './urlUtils';
+
 export function resolveHttpBaseUrl(url?: string): string {
   const target = url || defaultStorage.getHttpGatewayUrl();
-  try {
-    const parsed = new URL(target);
-    const protocol = parsed.protocol.startsWith('ws')
-      ? parsed.protocol === 'wss:'
-        ? 'https:'
-        : 'http:'
-      : parsed.protocol;
-    return `${protocol}//${parsed.host}`;
-  } catch {
-    const replaced = target.replace(/^wss?:\/\//i, (match) =>
-      match.toLowerCase().startsWith('wss') ? 'https://' : 'http://'
-    );
-    return replaced.replace(/\/ws\/?$/i, '').replace(/\/+$/, '');
-  }
+  return coreResolveHttpBaseUrl(target);
 }
 
 /**

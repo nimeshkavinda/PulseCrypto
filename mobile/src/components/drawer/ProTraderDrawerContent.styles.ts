@@ -33,7 +33,6 @@ export const styles = StyleSheet.create({
   profileName: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.heading,
   },
   profileMeta: {
@@ -44,7 +43,6 @@ export const styles = StyleSheet.create({
   },
   verifiedPill: {
     color: colors.bidGreen,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.bold,
   },
   menuContainer: {
@@ -55,7 +53,6 @@ export const styles = StyleSheet.create({
   sectionLabel: {
     color: colors.textMuted,
     fontSize: typography.fontSize.caption - 1,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.8,
     marginTop: spacing.md,
@@ -81,12 +78,10 @@ export const styles = StyleSheet.create({
   menuItemText: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.body,
-    fontWeight: typography.fontWeight.medium,
     fontFamily: typography.fontFamily.medium,
   },
   menuItemTextActive: {
     color: colors.primary,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.bold,
   },
   footer: {
@@ -106,7 +101,6 @@ export const styles = StyleSheet.create({
   signOutText: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.body,
-    fontWeight: typography.fontWeight.medium,
     fontFamily: typography.fontFamily.medium,
   },
   versionText: {

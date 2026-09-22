@@ -19,14 +19,20 @@ async function main() {
     .onDepth((symbol, bids, asks) => {
       orderBookManager.updateDepth(symbol, bids, asks);
     })
+    .onTrade((symbol, price, _isBuyerMaker) => {
+      metadataService.updateTradePrice(symbol, price);
+      orderBookManager.updateLastTrade(symbol, price);
+    })
     .onTicker((updates) => {
       for (const update of updates) {
         metadataService.updateFromMiniTicker(
           update.symbol,
           update.lastPrice,
+          update.openPrice,
           update.high24h,
           update.low24h,
-          update.volume24h
+          update.volume24h,
+          update.change24h
         );
       }
     })

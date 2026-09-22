@@ -117,6 +117,14 @@ This document details the architectural design and Architecture Decision Records
   * Loading Google Fonts via `useFonts()` and referencing registered PostScript names ensures cross-platform visual consistency on both Android and iOS without font clipping.
   * In React Native New Architecture Bridgeless mode, standard Chrome DevTools network hooks may report multiple host conflicts; Reactotron intercepts network requests directly in JavaScript without relying on C++ CDT host hooks.
 
+### ADR 8: Display-Side LVC Conflation & Native Dev-Build Benchmarking
+* **Context**: At 50 ticks/second across 5 pairs emitted from the WebSocket gateway, unthrottled React state updates cause excessive re-renders, JS thread saturation, and device thermal throttling. In addition, stock Expo Go has distinct runtime limitations compared to production builds.
+* **Decision**:
+  * Ingest incoming WebSocket frames into an in-memory Last-Value-Cache (`lvcRef`) and flush to React state every 250ms (~4 FPS React render ceiling for the terminal display).
+  * Compute price direction via `computePriceDirection` and `prevPriceRef` strictly outside `setState` updaters, preventing recursive nested update loops.
+  * Memoize child components (`OrderBookTable`, `OrderBookRow`, `LastPriceHero`, `MarketDepthChart`) and key order book rows by stable index (`bid-${index}`) to prevent 20-row unmount/remount churn per tick.
+  * **Expo Go vs Native Dev-Build Evaluation Note**: Stock Expo Go runs in interpreted development mode without Hermes ahead-of-time compilation optimizations on iOS, bundles debugging hooks, and lacks custom C++ JSI acceleration. Performance, FPS, and device thermals must be evaluated on native development builds (`npx expo run:ios` / `npx expo run:android`) or release builds, not Expo Go.
+
 ---
 
 ## 3. Production Scaling Architecture (At Scale Reference)

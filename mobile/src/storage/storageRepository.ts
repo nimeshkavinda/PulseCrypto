@@ -73,6 +73,8 @@ function getDefaultGatewayUrl(): string {
 
 export const DEFAULT_GATEWAY_URL = getDefaultGatewayUrl();
 
+import { resolveHttpBaseUrl } from '../api/urlUtils';
+
 export class StorageRepository {
   private backend: IStorageBackend;
 
@@ -106,9 +108,12 @@ export class StorageRepository {
     this.backend.clearAll();
   }
 
-  // --- Strongly Typed Domain Accessors ---
+  // --- Strongly Typed Domain Accessors & Subscriptions ---
 
   private favoritesListeners = new Set<(favorites: string[]) => void>();
+  private gatewayUrlListeners = new Set<(url: string) => void>();
+  private throttleListeners = new Set<(throttleMs: number) => void>();
+  private activePairListeners = new Set<(pair: string) => void>();
 
   public subscribeFavorites(listener: (favorites: string[]) => void): () => void {
     this.favoritesListeners.add(listener);
@@ -123,6 +128,57 @@ export class StorageRepository {
         listener(favorites);
       } catch (err) {
         console.error('[StorageRepository] Error in favorites listener:', err);
+      }
+    }
+  }
+
+  public subscribeGatewayUrl(listener: (url: string) => void): () => void {
+    this.gatewayUrlListeners.add(listener);
+    return () => {
+      this.gatewayUrlListeners.delete(listener);
+    };
+  }
+
+  private notifyGatewayUrl(url: string): void {
+    for (const listener of this.gatewayUrlListeners) {
+      try {
+        listener(url);
+      } catch (err) {
+        console.error('[StorageRepository] Error in gatewayUrl listener:', err);
+      }
+    }
+  }
+
+  public subscribeClientThrottle(listener: (throttleMs: number) => void): () => void {
+    this.throttleListeners.add(listener);
+    return () => {
+      this.throttleListeners.delete(listener);
+    };
+  }
+
+  private notifyClientThrottle(throttleMs: number): void {
+    for (const listener of this.throttleListeners) {
+      try {
+        listener(throttleMs);
+      } catch (err) {
+        console.error('[StorageRepository] Error in clientThrottle listener:', err);
+      }
+    }
+  }
+
+  public subscribeActivePair(listener: (pair: string) => void): () => void {
+    this.activePairListeners.add(listener);
+    return () => {
+      this.activePairListeners.delete(listener);
+    };
+  }
+
+  private notifyActivePair(pair: string): void {
+    for (const listener of this.activePairListeners) {
+      try {
+        listener(pair);
+      } catch (err) {
+        console.error('[StorageRepository] Error in activePair listener:', err);
       }
     }
   }
@@ -167,7 +223,11 @@ export class StorageRepository {
 
   public setClientThrottle(intervalMs: number): void {
     const clamped = Math.max(10, Math.min(1000, intervalMs));
+    if (this.getClientThrottle() === clamped) {
+      return;
+    }
     this.set(STORAGE_KEYS.THROTTLE_INTERVAL, clamped);
+    this.notifyClientThrottle(clamped);
   }
 
   public getGatewayUrl(): string {
@@ -176,21 +236,15 @@ export class StorageRepository {
   }
 
   public setGatewayUrl(url: string): void {
+    if (this.getGatewayUrl() === url) {
+      return;
+    }
     this.set(STORAGE_KEYS.GATEWAY_URL, url);
+    this.notifyGatewayUrl(url);
   }
 
   public getHttpGatewayUrl(): string {
-    const wsUrl = this.getGatewayUrl();
-    try {
-      const parsed = new URL(wsUrl);
-      const protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
-      return `${protocol}//${parsed.host}`;
-    } catch {
-      const replaced = wsUrl.replace(/^wss?:\/\//i, (match) =>
-        match.toLowerCase().startsWith('wss') ? 'https://' : 'http://'
-      );
-      return replaced.replace(/\/ws\/?$/i, '').replace(/\/+$/, '');
-    }
+    return resolveHttpBaseUrl(this.getGatewayUrl());
   }
 
   public getActivePair(): string {
@@ -199,7 +253,11 @@ export class StorageRepository {
   }
 
   public setActivePair(symbol: string): void {
+    if (this.getActivePair() === symbol) {
+      return;
+    }
     this.set(STORAGE_KEYS.ACTIVE_PAIR, symbol);
+    this.notifyActivePair(symbol);
   }
 }
 

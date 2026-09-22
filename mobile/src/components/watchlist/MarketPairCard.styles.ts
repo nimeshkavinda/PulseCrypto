@@ -26,7 +26,6 @@ export const styles = StyleSheet.create({
   symbolText: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.heading,
     marginRight: spacing.sm,
   },
@@ -48,7 +47,6 @@ export const styles = StyleSheet.create({
   liveText: {
     color: colors.bidGreen,
     fontSize: 9,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.5,
   },
@@ -69,7 +67,6 @@ export const styles = StyleSheet.create({
   },
   rangeValue: {
     color: colors.textSecondary,
-    fontWeight: typography.fontWeight.medium,
     fontFamily: typography.fontFamily.monoMedium,
   },
   rangeMarginLeft: {
@@ -83,7 +80,6 @@ export const styles = StyleSheet.create({
   priceText: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.monoBold,
     marginBottom: spacing.xs,
   },
@@ -102,7 +98,6 @@ export const styles = StyleSheet.create({
   },
   changeText: {
     fontSize: typography.fontSize.caption,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.bold,
   },
   changeTextPositive: {

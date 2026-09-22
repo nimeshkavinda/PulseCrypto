@@ -19,7 +19,6 @@ export const styles = StyleSheet.create({
   headerTitle: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.title,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.heading,
   },
   headerSubtitle: {
@@ -40,7 +39,6 @@ export const styles = StyleSheet.create({
   syncText: {
     color: colors.bidGreen,
     fontSize: 10,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.5,
   },
@@ -57,7 +55,6 @@ export const styles = StyleSheet.create({
   emptyTitle: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.heading,
     marginBottom: spacing.xs,
   },
