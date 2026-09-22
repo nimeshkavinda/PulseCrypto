@@ -11,6 +11,10 @@ dist/
 build/
 .expo/
 web-build/
+android/
+ios/
+mobile/android/
+mobile/ios/
 
 # Environment files
 .env
