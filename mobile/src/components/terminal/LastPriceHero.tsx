@@ -37,6 +37,12 @@ export const LastPriceHero = React.memo(function LastPriceHero({
       ? colors.askRed
       : changeColor;
 
+  // Arrow icon and pill color: reflect real-time tick direction when active, falling back to 24h trend
+  const isDownTick = priceDirection === 'down' || (priceDirection === 'neutral' && !isPositive);
+  const badgeColor = isDownTick ? colors.askRed : colors.bidGreen;
+  const badgeStyle = isDownTick ? styles.changeBadgeRed : styles.changeBadgeGreen;
+  const arrowIconName = isDownTick ? 'caret-down' : 'caret-up';
+
   // Flash animation shared value: 0 = transparent, 1 = flash green, 2 = flash red
   const flashAnim = useSharedValue(0);
   const prevPriceRef = useRef<number>(payload.price);
@@ -103,18 +109,13 @@ export const LastPriceHero = React.memo(function LastPriceHero({
           </Text>
         </Animated.View>
 
-        <View
-          style={[
-            styles.changeBadge,
-            isPositive ? styles.changeBadgeGreen : styles.changeBadgeRed,
-          ]}
-        >
+        <View style={[styles.changeBadge, badgeStyle]}>
           <Ionicons
-            name={isPositive ? 'caret-up' : 'caret-down'}
+            name={arrowIconName}
             size={14}
-            color={changeColor}
+            color={badgeColor}
           />
-          <Text style={[styles.changeText, { color: changeColor }]}>
+          <Text style={[styles.changeText, { color: badgeColor }]}>
             {Math.abs(payload.change24h).toFixed(2)}%
           </Text>
         </View>

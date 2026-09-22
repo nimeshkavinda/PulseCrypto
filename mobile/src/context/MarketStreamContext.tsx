@@ -131,27 +131,16 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const lvcRef = useRef<Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>>({});
   const pendingFlushRef = useRef<boolean>(false);
   const lastFlushTimeRef = useRef<number>(0);
-  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPriceRef = useRef<number | null>(null);
   const messagesCountRef = useRef<number>(0);
   const latencyRef = useRef<number>(0);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef<number>(0);
   const activePairRef = useRef<SupportedPairSymbol>(activePair);
   activePairRef.current = activePair;
-
-  const setActivePair = useCallback((pair: SupportedPairSymbol) => {
-    if (activePairRef.current === pair) return;
-    activePairRef.current = pair;
-    setActivePairState(pair);
-    defaultStorage.setActivePair(pair);
-    // Reset price tracking on pair switch
-    prevPriceRef.current = null;
-    setPrevPrice(null);
-    setPriceDirection('neutral');
-  }, []);
 
   const sendCommand = useCallback((cmd: ClientCommand) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -214,10 +203,34 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     setLatencyMs(latencyRef.current);
   }, []);
 
+  const setActivePair = useCallback(
+    (pair: SupportedPairSymbol) => {
+      if (activePairRef.current === pair) return;
+      activePairRef.current = pair;
+      setActivePairState(pair);
+      defaultStorage.setActivePair(pair);
+      // Reset price tracking on pair switch
+      prevPriceRef.current = null;
+      setPrevPrice(null);
+      setPriceDirection('neutral');
+      // Subscribe to backend using correct schema contract
+      sendCommand({ action: 'subscribe', pairs: [pair] });
+      // Immediately flush current LVC snapshot for instant display of new pair
+      pendingFlushRef.current = true;
+      flushPendingUpdates();
+    },
+    [sendCommand, flushPendingUpdates]
+  );
+
   const connect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
     }
 
     if (socketRef.current) {
@@ -270,8 +283,11 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
           const FLUSH_INTERVAL_MS = 250;
           if (!flushTimerRef.current) {
             flushTimerRef.current = setTimeout(() => {
-              flushTimerRef.current = null;
-              flushPendingUpdates();
+              try {
+                flushPendingUpdates();
+              } finally {
+                flushTimerRef.current = null;
+              }
             }, FLUSH_INTERVAL_MS);
           }
         } catch {
@@ -341,9 +357,11 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       unsubPair();
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
       }
       if (socketRef.current) {
         socketRef.current.close();

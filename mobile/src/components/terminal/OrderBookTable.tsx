@@ -28,18 +28,29 @@ export const OrderBookTable = React.memo(function OrderBookTable({
   const top10Bids = useMemo(() => bids.slice(0, 10), [bids]);
   const top10Asks = useMemo(() => asks.slice(0, 10), [asks]);
 
-  // Compute max single level order volume across visible book for percentage bar scaling.
-  // Directly aligns with Binance dashboard and Mockup 3: major volume walls produce long bars,
-  // while small orders render subtle minimal indicators instead of solid full-width cumulative blocks.
-  const maxVolume = useMemo(() => {
-    let max = 0.001;
+  // Compute cumulative base asset volume for bids and asks, scaled against the max cumulative volume.
+  // Perfectly matches Binance's actual web dashboard: bars represent cumulative depth accumulating outward from mid-market.
+  const { bidRatios, askRatios } = useMemo(() => {
+    let cumBid = 0;
+    const bidCums: number[] = [];
     for (const b of top10Bids) {
-      if (b[1] > max) max = b[1];
+      cumBid += b[1];
+      bidCums.push(cumBid);
     }
+
+    let cumAsk = 0;
+    const askCums: number[] = [];
     for (const a of top10Asks) {
-      if (a[1] > max) max = a[1];
+      cumAsk += a[1];
+      askCums.push(cumAsk);
     }
-    return max;
+
+    const maxCum = Math.max(cumBid, cumAsk, 0.001);
+
+    const bRatios = bidCums.map((c) => Math.min(1, Math.max(0.04, (c / maxCum) * 0.9)));
+    const aRatios = askCums.map((c) => Math.min(1, Math.max(0.04, (c / maxCum) * 0.9)));
+
+    return { bidRatios: bRatios, askRatios: aRatios };
   }, [top10Bids, top10Asks]);
 
   return (
@@ -53,7 +64,7 @@ export const OrderBookTable = React.memo(function OrderBookTable({
 
       {/* Top 10 Bids */}
       {top10Bids.map(([price, amount, total], index) => {
-        const depthRatio = Math.min(1, Math.max(0.04, amount / maxVolume));
+        const depthRatio = bidRatios[index] ?? 0.04;
         return (
           <OrderBookRow
             key={`bid-${index}`}
@@ -76,7 +87,7 @@ export const OrderBookTable = React.memo(function OrderBookTable({
 
       {/* Top 10 Asks */}
       {top10Asks.map(([price, amount, total], index) => {
-        const depthRatio = Math.min(1, Math.max(0.04, amount / maxVolume));
+        const depthRatio = askRatios[index] ?? 0.04;
         return (
           <OrderBookRow
             key={`ask-${index}`}

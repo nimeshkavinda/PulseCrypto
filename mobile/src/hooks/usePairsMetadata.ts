@@ -28,6 +28,7 @@ export function usePairsMetadata(): UsePairsMetadataResult {
     queryFn: () => fetchPairsMetadata(gatewayUrl),
     staleTime: 5000,
     refetchInterval: 10000, // Background poll every 10s for 24h stats
+    refetchOnWindowFocus: false,
     initialData: BASELINE_PAIRS_METADATA,
   });
 
