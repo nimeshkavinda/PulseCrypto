@@ -148,6 +148,8 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const messagesCountRef = useRef<number>(0);
   const lastSecCountRef = useRef<number>(0);
   const latencyRef = useRef<number>(0);
+  const pingSentAtRef = useRef<number>(0);
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const throttleIntervalRef = useRef<number>(defaultStorage.getClientThrottle());
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -284,20 +286,40 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
         if (throttle !== 100) {
           sendCommand({ action: 'setThrottle', intervalMs: throttle });
         }
+
+        // Start periodic RTT ping (every 5 seconds)
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = setInterval(() => {
+          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            pingSentAtRef.current = Date.now();
+            try {
+              socketRef.current.send(JSON.stringify({ action: 'ping' }));
+            } catch {
+              // ignore send errors
+            }
+          }
+        }, 5000);
+        // Send first ping immediately
+        pingSentAtRef.current = Date.now();
+        sendCommand({ action: 'ping' });
       };
 
       ws.onmessage = (event: { data: unknown }) => {
         try {
           const raw = typeof event.data === 'string' ? JSON.parse(event.data) : null;
+
+          // Handle pong response for RTT measurement
+          if (raw && raw.type === 'pong' && pingSentAtRef.current > 0) {
+            latencyRef.current = Math.max(0, Date.now() - pingSentAtRef.current);
+            return;
+          }
+
           if (!isValidMarketPayload(raw)) {
             return;
           }
 
           // Ingest into LVC buffer without calling setState on hot path
           messagesCountRef.current += 1;
-          if (raw.timestamp) {
-            latencyRef.current = Math.max(0, Date.now() - raw.timestamp);
-          }
           lvcRef.current[raw.pair] = raw;
           pendingFlushRef.current = true;
 
@@ -322,6 +344,10 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       };
 
       ws.onclose = () => {
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = null;
+        }
         setConnectionStatus('RECONNECTING');
         scheduleReconnect();
       };
@@ -390,6 +416,10 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       unsubGateway();
       unsubThrottle();
       unsubPair();
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;

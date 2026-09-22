@@ -18,6 +18,17 @@ import { styles } from './SettingsScreen.styles';
 
 const PRESETS = [50, 100, 250, 500, 1000];
 
+/** Convert a throttle ms value [10..1000] to a ratio [0..1] */
+function msToRatio(ms: number): number {
+  return Math.max(0, Math.min(1, (ms - 10) / 990));
+}
+
+/** Convert a ratio [0..1] to a throttle ms value [10..1000], rounded to 10ms */
+function ratioToMs(ratio: number): number {
+  const rawMs = 10 + ratio * 990;
+  return Math.round(rawMs / 10) * 10;
+}
+
 export function SettingsScreen() {
   const {
     throttleMs,
@@ -36,18 +47,23 @@ export function SettingsScreen() {
   const { connectionStatus, reconnect } = useMarketConnection();
 
   const [inputUrl, setInputUrl] = useState<string>(gatewayUrl);
-  const [sliderWidth, setSliderWidth] = useState<number>(300);
+  const [sliderWidth, setSliderWidth] = useState<number>(0);
   const trackRef = useRef<View>(null);
 
-  // Calculate ratio for current throttleMs in [10, 1000]
-  const currentRatio = Math.max(0, Math.min(1, (throttleMs - 10) / 990));
-  const thumbPosition = currentRatio * sliderWidth;
+  // Local drag state: while dragging, displayMs tracks finger position without
+  // triggering storage writes or network commands. Only committed on release.
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMs, setDragMs] = useState(throttleMs);
+  const displayMs = isDragging ? dragMs : throttleMs;
 
-  // Use refs so PanResponder handlers always read current values
+  // Refs for PanResponder to always read current values without stale closures
   const sliderWidthRef = useRef(sliderWidth);
   sliderWidthRef.current = sliderWidth;
   const setThrottleRef = useRef(setThrottle);
   setThrottleRef.current = setThrottle;
+
+  const currentRatio = msToRatio(displayMs);
+  const thumbPosition = sliderWidth > 0 ? currentRatio * sliderWidth : 0;
 
   const panResponder = useMemo(
     () =>
@@ -57,18 +73,27 @@ export function SettingsScreen() {
         onPanResponderGrant: (evt) => {
           const w = sliderWidthRef.current;
           if (w <= 0) return;
-          const x = evt.nativeEvent.locationX;
-          const ratio = Math.max(0, Math.min(1, x / w));
-          const rawMs = 10 + ratio * 990;
-          setThrottleRef.current(Math.round(rawMs / 10) * 10);
+          const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / w));
+          setDragMs(ratioToMs(ratio));
+          setIsDragging(true);
         },
         onPanResponderMove: (evt) => {
           const w = sliderWidthRef.current;
           if (w <= 0) return;
-          const x = evt.nativeEvent.locationX;
-          const ratio = Math.max(0, Math.min(1, x / w));
-          const rawMs = 10 + ratio * 990;
-          setThrottleRef.current(Math.round(rawMs / 10) * 10);
+          const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / w));
+          setDragMs(ratioToMs(ratio));
+        },
+        onPanResponderRelease: (evt) => {
+          const w = sliderWidthRef.current;
+          if (w > 0) {
+            const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / w));
+            const finalMs = ratioToMs(ratio);
+            setThrottleRef.current(finalMs);
+          }
+          setIsDragging(false);
+        },
+        onPanResponderTerminate: () => {
+          setIsDragging(false);
         },
       }),
     []
@@ -126,19 +151,20 @@ export function SettingsScreen() {
         {/* Update Frequency readout */}
         <View style={styles.frequencyRow}>
           <Text style={styles.frequencyLabel}>Update Frequency</Text>
-          <Text style={styles.frequencyValue}>{throttleMs}ms</Text>
+          <Text style={styles.frequencyValue}>{displayMs}ms</Text>
         </View>
 
-        {/* Interactive Slider Track */}
+        {/* Interactive Slider Track with enlarged hit area */}
         <View style={styles.sliderContainer}>
-          <View
-            ref={trackRef}
-            style={styles.track}
-            onLayout={handleTrackLayout}
-            {...panResponder.panHandlers}
-          >
-            <View style={[styles.filledTrack, { width: thumbPosition }]} />
-            <View style={[styles.thumb, { left: thumbPosition }]} />
+          <View style={styles.sliderHitArea} {...panResponder.panHandlers}>
+            <View
+              ref={trackRef}
+              style={styles.track}
+              onLayout={handleTrackLayout}
+            >
+              <View style={[styles.filledTrack, { width: thumbPosition }]} />
+              <View style={[styles.thumb, { left: thumbPosition }]} />
+            </View>
           </View>
           <View style={styles.sliderLabels}>
             <Text style={styles.sliderRangeText}>10ms</Text>
@@ -150,7 +176,7 @@ export function SettingsScreen() {
         {/* Preset buttons */}
         <View style={styles.presetsRow}>
           {PRESETS.map((p) => {
-            const isActive = throttleMs === p;
+            const isActive = displayMs === p;
             return (
               <TouchableOpacity
                 key={p}

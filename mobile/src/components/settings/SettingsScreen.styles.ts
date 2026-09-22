@@ -73,6 +73,10 @@ export const styles = StyleSheet.create({
     paddingVertical: 6,
     marginBottom: 2,
   },
+  sliderHitArea: {
+    height: 36,
+    justifyContent: 'center',
+  },
   track: {
     height: 4,
     borderRadius: 2,
