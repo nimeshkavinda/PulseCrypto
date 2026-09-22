@@ -5,6 +5,8 @@ import { defaultOrderBookManager } from './orderbook.js';
 import { defaultConflator } from './conflator.js';
 import { BinanceConnector } from './binance.js';
 
+import { config } from './config.js';
+
 async function main() {
   const metadataService = defaultMetadataService;
   const metricsRegistry = defaultMetrics;
@@ -49,8 +51,8 @@ async function main() {
     conflationEngine: conflator,
   });
 
-  const port = Number(process.env.PORT) || 8080;
-  const host = process.env.HOST || '0.0.0.0';
+  const port = config.PORT;
+  const host = config.HOST;
 
   const shutdown = async (signal: string) => {
     server.log.info(`[PulseCrypto Gateway] Received ${signal}, closing gracefully...`);
