@@ -1,0 +1,33 @@
+{
+  "name": "pulsecrypto",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PulseCrypto - Real-Time Cryptocurrency Market Streaming Platform",
+  "workspaces": [
+    "shared",
+    "backend",
+    "mobile"
+  ],
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:mobile": "npm --prefix mobile start",
+    "build:shared": "npm --prefix shared run build",
+    "build:backend": "npm --prefix backend run build",
+    "test:shared": "npm --prefix shared run test",
+    "test:backend": "npm --prefix backend run test",
+    "test:mobile": "npm --prefix mobile run test",
+    "test": "npm run test:shared && npm run test:backend",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "keywords": [
+    "cryptocurrency",
+    "market-data",
+    "real-time",
+    "react-native",
+    "fastify",
+    "websockets"
+  ],
+  "author": "Amused Group Candidate",
+  "license": "MIT"
+}
