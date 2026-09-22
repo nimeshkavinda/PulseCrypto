@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "PulseCrypto Real-Time Cryptocurrency Market Mobile Application",
-  "main": "index.ts",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start -c",
     "android": "expo start --android",
@@ -15,6 +15,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@expo-google-fonts/hanken-grotesk": "^0.4.3",
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo/vector-icons": "^15.1.1",
     "@pulsecrypto/shared": "*",
     "@react-navigation/bottom-tabs": "^7.19.2",
@@ -23,6 +26,11 @@
     "@shopify/flash-list": "^2.3.2",
     "@tanstack/react-query": "^5.103.2",
     "expo": "~57.0.24",
+    "expo-constants": "^57.0.19",
+    "expo-font": "^57.0.4",
+    "expo-linking": "^57.0.10",
+    "expo-router": "^57.0.22",
+    "expo-splash-screen": "^57.0.9",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3",
@@ -32,7 +40,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
-    "react-native-worklets": "0.10.4"
+    "react-native-worklets": "0.10.4",
+    "reactotron-react-native": "^5.3.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

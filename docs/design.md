@@ -101,12 +101,30 @@ This document details the architectural design and Architecture Decision Records
 
 ### ADR 6: Native Prebuild for MMKV Storage (Latest Mobile Stack)
 * **Context**: Fast local persistence for favorites and offline caching.
-* **Decision**: Standardize on the latest **Expo SDK 57** (`~57.0.24`), **React Native 0.86.3**, **React 19.2.3**, and **Node 24** (`v24.21.0`), using `react-native-mmkv` with `npx expo run:android` via `expo prebuild`.
+* **Decision**: Standardize on the latest **Expo SDK 57** (`~57.0.24`), **React Native 0.86.3**, **React 19.2.3**, using `react-native-mmkv` with `npx expo run:android` / `npx expo run:ios` via `expo prebuild`.
 * **Rationale**:
   * MMKV uses direct C++ JSI / Nitro bindings, operating ~30x faster than legacy AsyncStorage.
   * Synchronous reads eliminate layout shifts on app launch.
-  * Stock Expo Go does not support native C++ JSI modules, so native prebuild is explicitly required.
+  * Stock Expo Go does not bundle custom native C++ JSI modules, so native prebuild is explicitly required.
   * Expo SDK 57 and React Native 0.86 bring modern TurboModule architecture and Hermes engine optimizations by default.
+
+### ADR 7: Expo Router & FlashList for High-Performance Mobile Client
+* **Context**: Scalable mobile navigation, modern React Native architecture, and high-cadence list rendering.
+* **Decision**: Adopt **Expo Router** file-based navigation (`app/`) alongside `@shopify/flash-list`, Google Fonts (`@expo-google-fonts/hanken-grotesk`, `inter`, `jetbrains-mono`), and Reactotron JS-level network inspection.
+* **Rationale**:
+  * File-based routing organizes screens declaratively into groups (`(drawer)`, `(tabs)`) with automatic deep linking.
+  * `@shopify/flash-list` recycles native platform views rather than destroying/recreating them, eliminating frame drops during frequent price updates.
+  * Loading Google Fonts via `useFonts()` and referencing registered PostScript names ensures cross-platform visual consistency on both Android and iOS without font clipping.
+  * In React Native New Architecture Bridgeless mode, standard Chrome DevTools network hooks may report multiple host conflicts; Reactotron intercepts network requests directly in JavaScript without relying on C++ CDT host hooks.
+
+### ADR 8: Pino Structured Logging & Prometheus/Grafana Observability
+* **Context**: Real-time production monitoring of gateway health, conflation latency, and client socket backpressure.
+* **Decision**: Couple Fastify's zero-overhead Pino JSON logger with Prometheus metrics (`GET /metrics` via `prom-client`) and an out-of-the-box pre-provisioned Grafana dashboard in `docker-compose.yml`.
+* **Rationale**:
+  * Pino is designed for high-throughput Node.js microservices with near-zero latency impact, logging structured JSON directly to stdout for log forwarders (Fluentd, Vector, Datadog).
+  * Pino is a logging stream, not a metrics aggregator or visualization dashboard.
+  * Prometheus scrapes numerical timeseries counters/gauges (`ws_messages_ingested_total`, `conflation_duration_seconds`, `active_ws_connections`), while Grafana queries Prometheus to render real-time operational graphs.
+  * Pre-baking the Grafana datasource and dashboard JSON into Docker Compose allows reviewers to immediately visualize the backend streaming gateway at `http://localhost:3000` with zero manual configuration.
 
 ---
 

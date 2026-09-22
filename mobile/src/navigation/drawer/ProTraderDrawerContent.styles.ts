@@ -34,15 +34,18 @@ export const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.heading,
   },
   profileMeta: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.caption,
+    fontFamily: typography.fontFamily.regular,
     marginTop: 2,
   },
   verifiedPill: {
     color: colors.bidGreen,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
   },
   menuContainer: {
     flex: 1,
@@ -53,6 +56,7 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.fontSize.caption - 1,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.8,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
@@ -78,10 +82,12 @@ export const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.body,
     fontWeight: typography.fontWeight.medium,
+    fontFamily: typography.fontFamily.medium,
   },
   menuItemTextActive: {
     color: colors.primary,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
   },
   footer: {
     paddingHorizontal: spacing.lg,
@@ -101,10 +107,12 @@ export const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.fontSize.body,
     fontWeight: typography.fontWeight.medium,
+    fontFamily: typography.fontFamily.medium,
   },
   versionText: {
     color: colors.textMuted,
     fontSize: typography.fontSize.caption - 1,
+    fontFamily: typography.fontFamily.mono,
     textAlign: 'center',
     marginTop: spacing.xs,
   },

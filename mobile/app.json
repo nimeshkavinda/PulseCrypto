@@ -2,10 +2,14 @@
   "expo": {
     "name": "PulseCrypto",
     "slug": "pulsecrypto",
+    "scheme": "pulsecrypto",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "plugins": [
+      "expo-router"
+    ],
     "splash": {
       "backgroundColor": "#0B0E14",
       "resizeMode": "contain"

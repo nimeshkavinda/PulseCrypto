@@ -20,10 +20,12 @@ export const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.title,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.heading,
   },
   headerSubtitle: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.caption,
+    fontFamily: typography.fontFamily.regular,
     marginTop: 2,
   },
   syncBadge: {
@@ -39,6 +41,7 @@ export const styles = StyleSheet.create({
     color: colors.bidGreen,
     fontSize: 10,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.5,
   },
   listContent: {
@@ -55,11 +58,13 @@ export const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.heading,
     marginBottom: spacing.xs,
   },
   emptyText: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.body,
+    fontFamily: typography.fontFamily.regular,
     textAlign: 'center',
     lineHeight: typography.lineHeight.body,
   },
@@ -76,5 +81,6 @@ export const styles = StyleSheet.create({
     color: colors.bidGreen,
     fontSize: typography.fontSize.caption,
     fontWeight: typography.fontWeight.semiBold,
+    fontFamily: typography.fontFamily.semiBold,
   },
 });

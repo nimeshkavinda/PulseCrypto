@@ -27,6 +27,7 @@ export const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.heading,
     marginRight: spacing.sm,
   },
   livePill: {
@@ -48,11 +49,13 @@ export const styles = StyleSheet.create({
     color: colors.bidGreen,
     fontSize: 9,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.5,
   },
   volumeText: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.caption,
+    fontFamily: typography.fontFamily.regular,
     marginBottom: spacing.xs,
   },
   rangeRow: {
@@ -62,10 +65,12 @@ export const styles = StyleSheet.create({
   rangeLabel: {
     color: colors.textMuted,
     fontSize: typography.fontSize.caption,
+    fontFamily: typography.fontFamily.regular,
   },
   rangeValue: {
     color: colors.textSecondary,
     fontWeight: typography.fontWeight.medium,
+    fontFamily: typography.fontFamily.monoMedium,
   },
   rangeMarginLeft: {
     marginLeft: spacing.md,
@@ -79,7 +84,7 @@ export const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.subtitle,
     fontWeight: typography.fontWeight.bold,
-    fontFamily: typography.fontFamily.mono,
+    fontFamily: typography.fontFamily.monoBold,
     marginBottom: spacing.xs,
   },
   changePill: {
@@ -98,6 +103,7 @@ export const styles = StyleSheet.create({
   changeText: {
     fontSize: typography.fontSize.caption,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
   },
   changeTextPositive: {
     color: colors.bidGreen,

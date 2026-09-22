@@ -36,8 +36,15 @@ export const colors = {
 
 export const typography = {
   fontFamily: {
-    regular: 'System',
-    mono: 'Courier',
+    regular: 'Inter_400Regular',
+    medium: 'Inter_500Medium',
+    semiBold: 'Inter_600SemiBold',
+    bold: 'Inter_700Bold',
+    heading: 'HankenGrotesk_700Bold',
+    headingExtraBold: 'HankenGrotesk_800ExtraBold',
+    mono: 'JetBrainsMono_400Regular',
+    monoMedium: 'JetBrainsMono_500Medium',
+    monoBold: 'JetBrainsMono_700Bold',
   },
   fontSize: {
     caption: 11,

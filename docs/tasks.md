@@ -26,13 +26,13 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ## Phase 3: Mobile Foundation, Design Tokens & Shell
 - [x] **T3.1**: Initialize Expo React Native mobile project with TypeScript configured for native prebuild (`npx expo run:android`).
 - [x] **T3.2**: Implement Design System token module (colors `#0B0E14`, `#00C57A`, `#FF3B69`, `#1E2633`, typography, spacing).
-- [x] **T3.3**: Set up React Navigation: Pro Trader Side Drawer (static UI layout chrome matching Mockup 3) + 4 Bottom Tabs (Terminal, Markets, Telemetry, Settings).
+- [x] **T3.3**: Set up Expo Router file-based architecture (`mobile/app/`): Pro Trader Side Drawer (`(drawer)/_layout.tsx`) + 4 Bottom Tabs (`(tabs)/_layout.tsx` for Terminal, Markets, Telemetry, Settings), with custom Google Fonts (`@expo-google-fonts/hanken-grotesk`, `inter`, `jetbrains-mono`), safe area insets, and Reactotron mobile network inspection.
 - [x] **T3.4**: Implement `StorageRepository` using `react-native-mmkv` for synchronous local persistence.
 
 ---
 
 ## Phase 4: Markets Watchlist, Search, Filter & Favourites
-- [x] **T4.1**: Build Market Watchlist screen displaying all supported trading pairs (BTC, ETH, SOL, DOGE, XRP).
+- [x] **T4.1**: Build Market Watchlist screen displaying all supported trading pairs (BTC, ETH, SOL, DOGE, XRP) using `@shopify/flash-list` for 60 FPS virtualization, with separated component styling (`*.styles.ts`).
 - [x] **T4.2**: Implement search and filter bar for trading pairs.
 - [x] **T4.3**: Implement Favourites toggle with MMKV persistence and automatic restoration on startup.
 - [x] **T4.4**: Integrate TanStack Query (`@tanstack/react-query`) for `GET /pairs/meta` with pull-to-refresh (`refetch()` on `RefreshControl`) without interrupting active WebSocket streaming.
@@ -47,13 +47,16 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 
 ---
 
-## Phase 6: System Settings & In-App Telemetry Dashboard
+## Phase 6: System Settings & Telemetry Dashboard (Mobile & Backend Observability)
 - [ ] **T6.1**: Implement Client-Side Data Throttling Configurator slider (10ms–1000ms) to tune client render/flush frequency.
 - [ ] **T6.2**: Implement live Telemetry Performance Dashboard:
   - Circular JS Thread Frame Rate gauge (real-time FPS measurement via SVG).
   - Ingestion rate counter (msgs/sec).
   - Memory Footprint Sparkline chart (SVG path).
   - Hardware Acceleration & Storage cards adapted to native platform concepts ("Hermes / JSI Engine: Active", "MMKV Cache: X KB utilized").
+- [ ] **T6.3**: Backend Observability & Metrics Dashboard:
+  - Configure structured JSON logging via Fastify's built-in Pino logger (`fastify.log`) with request ID tracing and log redaction.
+  - Add Prometheus + Grafana service definitions to `docker-compose.yml` with pre-provisioned data sources and a pre-built crypto gateway dashboard (conflation latency, ws ingestion msg/sec, active client connections, memory RSS) accessible out-of-the-box at `http://localhost:3000`.
 
 ---
 

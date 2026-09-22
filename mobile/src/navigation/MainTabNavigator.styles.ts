@@ -28,5 +28,6 @@ export const styles = StyleSheet.create({
     color: colors.bidGreen,
     fontSize: typography.fontSize.caption,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
   },
 });

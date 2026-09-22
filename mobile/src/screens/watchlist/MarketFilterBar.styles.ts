@@ -26,6 +26,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     color: colors.textPrimary,
     fontSize: typography.fontSize.body,
+    fontFamily: typography.fontFamily.regular,
     paddingVertical: 0,
   },
   tabsContainer: {
@@ -53,6 +54,7 @@ export const styles = StyleSheet.create({
   chipText: {
     fontSize: typography.fontSize.caption,
     fontWeight: typography.fontWeight.semiBold,
+    fontFamily: typography.fontFamily.semiBold,
   },
   chipTextActive: {
     color: colors.textPrimary,
@@ -75,6 +77,7 @@ export const styles = StyleSheet.create({
   chipBadgeText: {
     fontSize: 9,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.monoBold,
   },
   chipBadgeTextActive: {
     color: colors.primary,
