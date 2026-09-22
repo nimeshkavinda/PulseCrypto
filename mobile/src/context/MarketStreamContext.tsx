@@ -5,13 +5,14 @@ import React, {
   useRef,
   useState,
   useCallback,
+  useMemo,
   ReactNode,
 } from 'react';
 import {
   SupportedPairSymbol,
   MarketUpdatePayload,
-  MarketUpdatePayloadSchema,
   ClientCommand,
+  SUPPORTED_PAIRS,
 } from '@pulsecrypto/shared';
 import { defaultStorage } from '../storage/storageRepository';
 import { resolveWsBaseUrl } from '../api/urlUtils';
@@ -35,6 +36,34 @@ export interface MarketStreamContextValue {
 }
 
 const MarketStreamContext = createContext<MarketStreamContextValue | null>(null);
+
+/**
+ * Pure helper to compute price direction between ticks.
+ */
+export function computePriceDirection(prevPrice: number | null, currentPrice: number): PriceDirection {
+  if (prevPrice === null || prevPrice === currentPrice) {
+    return 'neutral';
+  }
+  return currentPrice > prevPrice ? 'up' : 'down';
+}
+
+/**
+ * Fast boundary check for incoming WebSocket market payloads.
+ * Avoids heavy Zod tree traversal in the high-frequency tick path.
+ */
+export function isValidMarketPayload(raw: unknown): raw is MarketUpdatePayload {
+  if (!raw || typeof raw !== 'object') return false;
+  const p = raw as Partial<MarketUpdatePayload>;
+  return (
+    typeof p.pair === 'string' &&
+    p.pair in SUPPORTED_PAIRS &&
+    typeof p.price === 'number' &&
+    Number.isFinite(p.price) &&
+    typeof p.timestamp === 'number' &&
+    Array.isArray(p.bids) &&
+    Array.isArray(p.asks)
+  );
+}
 
 /**
  * Creates a synthetic fallback MarketUpdatePayload from baseline metadata
@@ -98,6 +127,15 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const [latencyMs, setLatencyMs] = useState<number>(0);
   const [messagesReceivedTotal, setMessagesReceivedTotal] = useState<number>(0);
 
+  // In-memory Last-Value-Cache (LVC) & Conflation refs
+  const lvcRef = useRef<Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>>({});
+  const pendingFlushRef = useRef<boolean>(false);
+  const lastFlushTimeRef = useRef<number>(0);
+  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const prevPriceRef = useRef<number | null>(null);
+  const messagesCountRef = useRef<number>(0);
+  const latencyRef = useRef<number>(0);
+
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef<number>(0);
@@ -107,6 +145,10 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const setActivePair = useCallback((pair: SupportedPairSymbol) => {
     setActivePairState(pair);
     defaultStorage.setActivePair(pair);
+    // Reset price tracking on pair switch
+    prevPriceRef.current = null;
+    setPrevPrice(null);
+    setPriceDirection('neutral');
   }, []);
 
   const sendCommand = useCallback((cmd: ClientCommand) => {
@@ -126,6 +168,36 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     },
     [sendCommand]
   );
+
+  /**
+   * Flushes accumulated LVC buffer to React state in a single batch pass.
+   * Compares prices OUTSIDE setState to avoid impure updater infinite loops.
+   */
+  const flushPendingUpdates = useCallback(() => {
+    if (!pendingFlushRef.current) return;
+    pendingFlushRef.current = false;
+    lastFlushTimeRef.current = Date.now();
+
+    const snapshot = { ...lvcRef.current };
+    const currentActive = activePairRef.current;
+    const activeItem = snapshot[currentActive];
+
+    if (activeItem) {
+      const currentPrice = activeItem.price;
+      const oldPrice = prevPriceRef.current;
+      if (oldPrice !== null && oldPrice !== currentPrice) {
+        const dir = computePriceDirection(oldPrice, currentPrice);
+        setPrevPrice(oldPrice);
+        setPriceDirection(dir);
+      }
+      prevPriceRef.current = currentPrice;
+    }
+
+    // Exactly one setPayloads call per flush pass
+    setPayloads((prev) => ({ ...prev, ...snapshot }));
+    setMessagesReceivedTotal(messagesCountRef.current);
+    setLatencyMs(latencyRef.current);
+  }, []);
 
   const connect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -167,34 +239,30 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       ws.onmessage = (event: WebSocketMessageEvent) => {
         try {
           const raw = typeof event.data === 'string' ? JSON.parse(event.data) : null;
-          if (!raw || !raw.pair) return;
-
-          const parsed = MarketUpdatePayloadSchema.safeParse(raw);
-          if (!parsed.success) return;
-
-          const payload = parsed.data;
-          setMessagesReceivedTotal((count) => count + 1);
-
-          if (payload.timestamp) {
-            const now = Date.now();
-            setLatencyMs(Math.max(0, now - payload.timestamp));
+          if (!isValidMarketPayload(raw)) {
+            return;
           }
 
-          setPayloads((prev) => ({
-            ...prev,
-            [payload.pair]: payload,
-          }));
+          // Ingest into LVC buffer without calling setState on hot path
+          messagesCountRef.current += 1;
+          if (raw.timestamp) {
+            latencyRef.current = Math.max(0, Date.now() - raw.timestamp);
+          }
+          lvcRef.current[raw.pair] = raw;
+          pendingFlushRef.current = true;
 
-          // Track price direction for active pair
-          if (payload.pair === activePairRef.current) {
-            setPayloads((current) => {
-              const prevItem = current[payload.pair];
-              if (prevItem && prevItem.price !== payload.price) {
-                setPrevPrice(prevItem.price);
-                setPriceDirection(payload.price > prevItem.price ? 'up' : 'down');
-              }
-              return { ...current, [payload.pair]: payload };
-            });
+          // Throttled display-side conflation (target: ~3-4 renders/sec, well under 10/sec ceiling)
+          const now = Date.now();
+          const FLUSH_INTERVAL_MS = 250;
+          const elapsed = now - lastFlushTimeRef.current;
+
+          if (elapsed >= FLUSH_INTERVAL_MS) {
+            flushPendingUpdates();
+          } else if (!flushTimerRef.current) {
+            flushTimerRef.current = setTimeout(() => {
+              flushTimerRef.current = null;
+              flushPendingUpdates();
+            }, FLUSH_INTERVAL_MS - elapsed);
           }
         } catch {
           // invalid JSON or binary frame — ignore gracefully
@@ -213,7 +281,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       setConnectionStatus('RECONNECTING');
       scheduleReconnect();
     }
-  }, [sendCommand]);
+  }, [flushPendingUpdates, sendCommand]);
 
   const scheduleReconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) return;
@@ -252,7 +320,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
 
     // Listen for active pair changes from storage
     const unsubPair = defaultStorage.subscribeActivePair((pair) => {
-      setActivePairState(pair as SupportedPairSymbol);
+      setActivePair(pair as SupportedPairSymbol);
     });
 
     return () => {
@@ -262,15 +330,19 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+      }
       if (socketRef.current) {
         socketRef.current.close();
       }
     };
-  }, [connect, sendCommand]);
+  }, [connect, sendCommand, setActivePair]);
 
   const activePayload = payloads[activePair] || null;
 
-  const value: MarketStreamContextValue = {
+  // Memoize context value so consumer components do not re-render unless values actually change
+  const value = useMemo<MarketStreamContextValue>(() => ({
     activePair,
     setActivePair,
     activePayload,
@@ -282,7 +354,19 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     reconnect,
     latencyMs,
     messagesReceivedTotal,
-  };
+  }), [
+    activePair,
+    setActivePair,
+    activePayload,
+    payloads,
+    connectionStatus,
+    prevPrice,
+    priceDirection,
+    setThrottle,
+    reconnect,
+    latencyMs,
+    messagesReceivedTotal,
+  ]);
 
   return <MarketStreamContext.Provider value={value}>{children}</MarketStreamContext.Provider>;
 }

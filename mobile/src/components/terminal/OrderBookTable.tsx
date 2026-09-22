@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import { DepthTuple } from '@pulsecrypto/shared';
 import { OrderBookRow } from './OrderBookRow';
@@ -16,7 +16,7 @@ interface OrderBookTableProps {
   spreadPct?: number;
 }
 
-export function OrderBookTable({
+export const OrderBookTable = React.memo(function OrderBookTable({
   bids,
   asks,
   baseAsset,
@@ -26,13 +26,15 @@ export function OrderBookTable({
   spread = 0,
   spreadPct = 0,
 }: OrderBookTableProps) {
-  const top10Bids = bids.slice(0, 10);
-  const top10Asks = asks.slice(0, 10);
+  const top10Bids = useMemo(() => bids.slice(0, 10), [bids]);
+  const top10Asks = useMemo(() => asks.slice(0, 10), [asks]);
 
   // Compute max cumulative volume across top 10 for percentage bar scaling
-  const maxBidTotal = top10Bids[top10Bids.length - 1]?.[2] ?? 1;
-  const maxAskTotal = top10Asks[top10Asks.length - 1]?.[2] ?? 1;
-  const maxCumulative = Math.max(maxBidTotal, maxAskTotal, 1);
+  const maxCumulative = useMemo(() => {
+    const maxBidTotal = top10Bids[top10Bids.length - 1]?.[2] ?? 1;
+    const maxAskTotal = top10Asks[top10Asks.length - 1]?.[2] ?? 1;
+    return Math.max(maxBidTotal, maxAskTotal, 1);
+  }, [top10Bids, top10Asks]);
 
   return (
     <View style={styles.container}>
@@ -48,7 +50,7 @@ export function OrderBookTable({
         const depthRatio = total / maxCumulative;
         return (
           <OrderBookRow
-            key={`bid-${price}-${index}`}
+            key={`bid-${index}`}
             price={price}
             amount={amount}
             total={total}
@@ -80,7 +82,7 @@ export function OrderBookTable({
         const depthRatio = total / maxCumulative;
         return (
           <OrderBookRow
-            key={`ask-${price}-${index}`}
+            key={`ask-${index}`}
             price={price}
             amount={amount}
             total={total}
@@ -93,4 +95,4 @@ export function OrderBookTable({
       })}
     </View>
   );
-}
+});

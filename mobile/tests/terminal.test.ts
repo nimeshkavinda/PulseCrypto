@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { MarketUpdatePayloadSchema, SupportedPairSymbol } from '@pulsecrypto/shared';
-import { createFallbackPayload } from '../src/context/MarketStreamContext';
+import {
+  createFallbackPayload,
+  computePriceDirection,
+  isValidMarketPayload,
+} from '../src/context/MarketStreamContext';
 
 describe('Pro Terminal & Order Book Logic (Phase 5: Tasks T5.1 - T5.5)', () => {
   describe('Fallback Payload Generator (Cold Start & Offline Resilience)', () => {
@@ -137,6 +141,88 @@ describe('Pro Terminal & Order Book Logic (Phase 5: Tasks T5.1 - T5.5)', () => {
       expect(getPressureLabel(40, 60)).toBe('Sell Heavy (60%)');
       expect(getPressureLabel(52, 48)).toBe('Balanced');
       expect(getPressureLabel(50, 50)).toBe('Balanced');
+    });
+  });
+
+  describe('Price Direction Tracking (computePriceDirection)', () => {
+    it('should return neutral when prevPrice is null or equal to currentPrice', () => {
+      expect(computePriceDirection(null, 65000)).toBe('neutral');
+      expect(computePriceDirection(65000, 65000)).toBe('neutral');
+    });
+
+    it('should return up when currentPrice > prevPrice', () => {
+      expect(computePriceDirection(64999.99, 65000)).toBe('up');
+      expect(computePriceDirection(100, 105)).toBe('up');
+    });
+
+    it('should return down when currentPrice < prevPrice', () => {
+      expect(computePriceDirection(65000.01, 65000)).toBe('down');
+      expect(computePriceDirection(105, 100)).toBe('down');
+    });
+  });
+
+  describe('Fast Payload Boundary Checker (isValidMarketPayload)', () => {
+    it('should accept a valid MarketUpdatePayload', () => {
+      const payload = createFallbackPayload('BTCUSDT');
+      expect(isValidMarketPayload(payload)).toBe(true);
+    });
+
+    it('should reject invalid or malformed data frames', () => {
+      expect(isValidMarketPayload(null)).toBe(false);
+      expect(isValidMarketPayload(undefined)).toBe(false);
+      expect(isValidMarketPayload('string')).toBe(false);
+      expect(isValidMarketPayload(123)).toBe(false);
+      expect(isValidMarketPayload({})).toBe(false);
+      expect(isValidMarketPayload({ pair: 'INVALID_PAIR', price: 100, timestamp: 123, bids: [], asks: [] })).toBe(false);
+      expect(isValidMarketPayload({ pair: 'BTCUSDT', price: NaN, timestamp: 123, bids: [], asks: [] })).toBe(false);
+      expect(isValidMarketPayload({ pair: 'BTCUSDT', price: 100, timestamp: 123, bids: 'not-array', asks: [] })).toBe(false);
+    });
+  });
+
+  describe('Rapid Message Conflation & LVC Ingestion', () => {
+    it('should conflate sequential rapid updates into LVC without state update depth recursion', () => {
+      const lvc: Record<string, { pair: string; price: number; timestamp: number }> = {};
+      let prevPrice: number | null = null;
+      let priceDirection: string = 'neutral';
+
+      const ticks = [
+        { pair: 'BTCUSDT', price: 65000, timestamp: 1000 },
+        { pair: 'BTCUSDT', price: 65050, timestamp: 1050 },
+        { pair: 'BTCUSDT', price: 64980, timestamp: 1100 },
+      ];
+
+      // Simulate rapid ingestion into LVC buffer
+      for (const tick of ticks) {
+        lvc[tick.pair] = tick;
+      }
+
+      // Simulate single batch flush
+      const activeItem = lvc['BTCUSDT'];
+      if (activeItem) {
+        const currentPrice = activeItem.price;
+        if (prevPrice !== null && prevPrice !== currentPrice) {
+          priceDirection = computePriceDirection(prevPrice, currentPrice);
+        }
+        prevPrice = currentPrice;
+      }
+
+      // Last value cache retained the final tick
+      expect(lvc['BTCUSDT'].price).toBe(64980);
+      expect(prevPrice).toBe(64980);
+      // Because prevPrice was initially null, first evaluation yields neutral without recursion
+      expect(priceDirection).toBe('neutral');
+
+      // Subsequent tick evaluation
+      const nextTick = { pair: 'BTCUSDT', price: 65100, timestamp: 1200 };
+      lvc[nextTick.pair] = nextTick;
+      const nextActive = lvc['BTCUSDT'];
+      if (nextActive && prevPrice !== null && prevPrice !== nextActive.price) {
+        priceDirection = computePriceDirection(prevPrice, nextActive.price);
+        prevPrice = nextActive.price;
+      }
+
+      expect(prevPrice).toBe(65100);
+      expect(priceDirection).toBe('up');
     });
   });
 });

@@ -16,7 +16,7 @@ interface MarketDepthChartProps {
   sellPressure?: number;
 }
 
-export function MarketDepthChart({
+export const MarketDepthChart = React.memo(function MarketDepthChart({
   bids,
   asks,
   baseAsset,
@@ -31,24 +31,40 @@ export function MarketDepthChart({
   }>({ bids, asks });
 
   const lastRedrawTimeRef = useRef<number>(0);
+  const pendingDataRef = useRef<{ bids: DepthTuple[]; asks: DepthTuple[] }>({ bids, asks });
+  pendingDataRef.current = { bids, asks };
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Safety-floored redraw cadence per ADR 5: Math.max(sliderValue, 250)
   useEffect(() => {
     const throttleMs = defaultStorage.getClientThrottle();
     const minRedrawInterval = Math.max(throttleMs, 250);
     const now = Date.now();
+    const elapsed = now - lastRedrawTimeRef.current;
 
-    if (now - lastRedrawTimeRef.current >= minRedrawInterval) {
+    if (elapsed >= minRedrawInterval) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       lastRedrawTimeRef.current = now;
       setChartData({ bids, asks });
-    } else {
-      const timer = setTimeout(() => {
+    } else if (!timerRef.current) {
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
         lastRedrawTimeRef.current = Date.now();
-        setChartData({ bids, asks });
-      }, minRedrawInterval - (now - lastRedrawTimeRef.current));
-      return () => clearTimeout(timer);
+        setChartData(pendingDataRef.current);
+      }, minRedrawInterval - elapsed);
     }
   }, [bids, asks]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -206,4 +222,4 @@ export function MarketDepthChart({
       </View>
     </View>
   );
-}
+});

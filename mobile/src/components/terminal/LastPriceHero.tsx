@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -19,7 +19,10 @@ interface LastPriceHeroProps {
   priceDirection: PriceDirection;
 }
 
-export function LastPriceHero({ payload, priceDirection }: LastPriceHeroProps) {
+export const LastPriceHero = React.memo(function LastPriceHero({
+  payload,
+  priceDirection,
+}: LastPriceHeroProps) {
   const pairInfo = SUPPORTED_PAIRS[payload.pair];
   const priceDecimals = pairInfo?.priceDecimals ?? 2;
 
@@ -28,19 +31,30 @@ export function LastPriceHero({ payload, priceDirection }: LastPriceHeroProps) {
 
   // Flash animation shared value: 0 = transparent, 1 = flash green, 2 = flash red
   const flashAnim = useSharedValue(0);
+  const prevPriceRef = useRef<number>(payload.price);
+  const prevDirectionRef = useRef<PriceDirection>(priceDirection);
 
   useEffect(() => {
-    if (priceDirection === 'up') {
-      flashAnim.value = withSequence(
-        withTiming(1, { duration: 120 }),
-        withTiming(0, { duration: 350 })
-      );
-    } else if (priceDirection === 'down') {
-      flashAnim.value = withSequence(
-        withTiming(2, { duration: 120 }),
-        withTiming(0, { duration: 350 })
-      );
+    // Only flash if price actually changed and direction is non-neutral
+    const priceChanged = prevPriceRef.current !== payload.price;
+    const directionChanged = prevDirectionRef.current !== priceDirection;
+
+    if ((priceChanged || directionChanged) && priceDirection !== 'neutral') {
+      if (priceDirection === 'up') {
+        flashAnim.value = withSequence(
+          withTiming(1, { duration: 120 }),
+          withTiming(0, { duration: 350 })
+        );
+      } else if (priceDirection === 'down') {
+        flashAnim.value = withSequence(
+          withTiming(2, { duration: 120 }),
+          withTiming(0, { duration: 350 })
+        );
+      }
     }
+
+    prevPriceRef.current = payload.price;
+    prevDirectionRef.current = priceDirection;
   }, [priceDirection, payload.price, flashAnim]);
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -123,4 +137,4 @@ export function LastPriceHero({ payload, priceDirection }: LastPriceHeroProps) {
       </View>
     </View>
   );
-}
+});
