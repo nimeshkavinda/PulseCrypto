@@ -17,12 +17,6 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     logger: shouldLog
       ? {
           level: isDev ? 'info' : 'warn',
-          transport: isDev
-            ? {
-                target: 'pino-pretty',
-                options: { colorize: true, translateTime: 'HH:MM:ss Z', ignore: 'pid,hostname' },
-              }
-            : undefined,
         }
       : false,
   });

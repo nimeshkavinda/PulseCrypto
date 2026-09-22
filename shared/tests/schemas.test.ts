@@ -3,7 +3,6 @@ import {
   MarketUpdatePayloadSchema,
   PairMetadataSchema,
   ClientCommandSchema,
-  SupportedPairSymbolSchema,
   MarketUpdatePayload,
   PairMetadata,
   SUPPORTED_PAIRS,
