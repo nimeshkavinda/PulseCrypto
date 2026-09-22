@@ -15,7 +15,7 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 
 ## Phase 2: Backend Gateway & Stream Conflation Engine
 - [x] **T2.1**: Implement Fastify HTTP server with `GET /pairs/meta`, `GET /health`, and lightweight Prometheus `/metrics`.
-- [ ] **T2.2**: Implement resilient Binance WebSocket client connector with multi-stream subscription (`depth20@100ms`, `!miniTicker@arr`), auto-reconnect with jitter, and heartbeat monitoring.
+- [x] **T2.2**: Implement resilient Binance WebSocket client connector with multi-stream subscription (`depth20@100ms`, `!miniTicker@arr`), auto-reconnect with jitter, and heartbeat monitoring.
 - [ ] **T2.3**: Build in-memory Order Book manager and Derived Analytics engine (spread, buy/sell pressure, cumulative totals).
 - [ ] **T2.4**: Implement Conflation Engine with environment-configurable emission timer (`FLUSH_INTERVAL_MS`, default: 100ms).
 - [ ] **T2.5**: Implement 3-tier backpressure guard (`socket.bufferedAmount` inspection: normal, shed depth at 512KB, terminate at 2MB).
