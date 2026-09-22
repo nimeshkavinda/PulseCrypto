@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPairsMetadata, BASELINE_PAIRS_METADATA } from '../api/marketApi';
 import { PairMetadata } from '@pulsecrypto/shared';
@@ -13,7 +14,14 @@ export interface UsePairsMetadataResult {
 }
 
 export function usePairsMetadata(): UsePairsMetadataResult {
-  const gatewayUrl = defaultStorage.getHttpGatewayUrl();
+  const [gatewayUrl, setGatewayUrl] = useState<string>(() => defaultStorage.getHttpGatewayUrl());
+
+  useEffect(() => {
+    const unsubscribe = defaultStorage.subscribeGatewayUrl(() => {
+      setGatewayUrl(defaultStorage.getHttpGatewayUrl());
+    });
+    return unsubscribe;
+  }, []);
 
   const query = useQuery({
     queryKey: ['pairsMetadata', gatewayUrl],

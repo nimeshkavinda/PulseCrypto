@@ -40,11 +40,11 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ---
 
 ## Phase 5: Pro Terminal (Live Order Book & SVG Depth Chart)
-- [ ] **T5.1**: Build Last Price Header component with 24h change %, 24h high/low, and connection status pill.
-- [ ] **T5.2**: Build Live Order Book table (top 10 bids in green, top 10 asks in red) with animated volume depth bars.
-- [ ] **T5.3**: Implement UI-thread price flash micro-animations (green for tick up, red for tick down via Reanimated).
-- [ ] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with safety-floored redraw cadence (`Math.max(sliderValue, 250)`), Liquidity Gap badge, and Buy/Sell Pressure ratio.
-- [ ] **T5.5**: Gateway Connection & Navigation Integration:
+- [x] **T5.1**: Build Last Price Header component with 24h change %, 24h high/low, and connection status pill.
+- [x] **T5.2**: Build Live Order Book table (top 10 bids in green, top 10 asks in red) with animated volume depth bars.
+- [x] **T5.3**: Implement UI-thread price flash micro-animations (green for tick up, red for tick down via Reanimated).
+- [x] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with safety-floored redraw cadence (`Math.max(sliderValue, 250)`), Liquidity Gap badge, and Buy/Sell Pressure ratio.
+- [x] **T5.5**: Gateway Connection & Navigation Integration:
   - Wire header `LIVE` status pill to active WebSocket connectivity state.
   - Consolidate gateway URL resolution into a single reactive URL utility module (`marketApi.resolveHttpBaseUrl` vs `storage.getHttpGatewayUrl`).
   - Subscribe `usePairsMetadata` to storage so Settings gateway edits trigger query invalidation without component remount.

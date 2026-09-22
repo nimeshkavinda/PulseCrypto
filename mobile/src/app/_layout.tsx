@@ -25,6 +25,8 @@ import {
 } from '@expo-google-fonts/jetbrains-mono';
 import '../devtools/reactotron';
 
+import { MarketStreamProvider } from '../context/MarketStreamContext';
+
 // Keep the splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -68,8 +70,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          <StatusBar style="light" />
-          <Slot />
+          <MarketStreamProvider>
+            <StatusBar style="light" />
+            <Slot />
+          </MarketStreamProvider>
         </SafeAreaProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

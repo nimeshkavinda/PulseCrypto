@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,9 +7,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../../../theme/tokens';
 import { styles } from '../../../components/navigation/TabBar.styles';
 
+import { HeaderStatusPill } from '../../../components/navigation/HeaderStatusPill';
+import { useMarketStream } from '../../../hooks/useMarketStream';
+import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
+
 export default function TabLayout() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { activePair } = useMarketStream();
+
+  const pairDisplayName = SUPPORTED_PAIRS[activePair]?.displayName || 'BTC/USDT';
 
   const renderHeaderLeft = () => (
     <TouchableOpacity
@@ -24,12 +31,7 @@ export default function TabLayout() {
     </TouchableOpacity>
   );
 
-  const renderHeaderRight = () => (
-    <View style={styles.statusPill}>
-      <View style={styles.liveDot} />
-      <Text style={styles.statusPillText}>LIVE</Text>
-    </View>
-  );
+  const renderHeaderRight = () => <HeaderStatusPill />;
 
   return (
     <Tabs
@@ -70,7 +72,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Terminal',
+          title: pairDisplayName,
           tabBarLabel: 'Terminal',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="stats-chart-outline" size={size} color={color} />
