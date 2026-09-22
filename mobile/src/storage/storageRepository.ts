@@ -108,6 +108,25 @@ export class StorageRepository {
 
   // --- Strongly Typed Domain Accessors ---
 
+  private favoritesListeners = new Set<(favorites: string[]) => void>();
+
+  public subscribeFavorites(listener: (favorites: string[]) => void): () => void {
+    this.favoritesListeners.add(listener);
+    return () => {
+      this.favoritesListeners.delete(listener);
+    };
+  }
+
+  private notifyFavorites(favorites: string[]): void {
+    for (const listener of this.favoritesListeners) {
+      try {
+        listener(favorites);
+      } catch (err) {
+        console.error('[StorageRepository] Error in favorites listener:', err);
+      }
+    }
+  }
+
   public getFavorites(): string[] {
     const favs = this.get<string[]>(STORAGE_KEYS.FAVORITES);
     if (Array.isArray(favs)) {
@@ -118,6 +137,7 @@ export class StorageRepository {
 
   public setFavorites(favorites: string[]): void {
     this.set(STORAGE_KEYS.FAVORITES, favorites);
+    this.notifyFavorites(favorites);
   }
 
   public toggleFavorite(symbol: string): boolean {
@@ -157,6 +177,20 @@ export class StorageRepository {
 
   public setGatewayUrl(url: string): void {
     this.set(STORAGE_KEYS.GATEWAY_URL, url);
+  }
+
+  public getHttpGatewayUrl(): string {
+    const wsUrl = this.getGatewayUrl();
+    try {
+      const parsed = new URL(wsUrl);
+      const protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+      return `${protocol}//${parsed.host}`;
+    } catch {
+      const replaced = wsUrl.replace(/^wss?:\/\//i, (match) =>
+        match.toLowerCase().startsWith('wss') ? 'https://' : 'http://'
+      );
+      return replaced.replace(/\/ws\/?$/i, '').replace(/\/+$/, '');
+    }
   }
 
   public getActivePair(): string {

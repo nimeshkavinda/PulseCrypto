@@ -1,24 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens';
+import { StyleSheet } from 'react-native';
+import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
-export function SettingsScreen() {
-  return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>PHASE 6 SETTINGS</Text>
-        </View>
-        <Text style={styles.title}>System Settings</Text>
-        <Text style={styles.subtitle}>
-          In-app client-side data throttling configurator slider (10ms–1000ms), gateway endpoint config, and cache options.
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primary,
@@ -36,8 +19,8 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   badge: {
-    backgroundColor: colors.bidGreenSubtle,
-    borderColor: colors.bidGreen,
+    backgroundColor: colors.warningYellowSubtle,
+    borderColor: colors.warningYellow,
     borderWidth: 1,
     borderRadius: borderRadius.pill,
     paddingHorizontal: spacing.md,
@@ -45,20 +28,23 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   badgeText: {
-    color: colors.bidGreen,
+    color: colors.warningYellow,
     fontSize: typography.fontSize.caption,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
   },
   title: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.title,
     fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.heading,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.body,
+    fontFamily: typography.fontFamily.regular,
     textAlign: 'center',
     lineHeight: typography.lineHeight.body,
   },

@@ -103,4 +103,25 @@ describe('StorageRepository Synchronous Persistence (Task T3.4)', () => {
       }
     }
   });
+
+  it('should notify subscribers when favorites change via setFavorites or toggleFavorite', () => {
+    const notifications: string[][] = [];
+    const unsubscribe = storage.subscribeFavorites((updated) => {
+      notifications.push(updated);
+    });
+
+    storage.setFavorites(['BTCUSDT']);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toEqual(['BTCUSDT']);
+
+    storage.toggleFavorite('SOLUSDT');
+    expect(notifications).toHaveLength(2);
+    expect(notifications[1]).toEqual(['BTCUSDT', 'SOLUSDT']);
+
+    unsubscribe();
+
+    storage.toggleFavorite('BTCUSDT');
+    // Notification count should not increase after unsubscribe
+    expect(notifications).toHaveLength(2);
+  });
 });

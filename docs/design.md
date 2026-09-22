@@ -101,12 +101,21 @@ This document details the architectural design and Architecture Decision Records
 
 ### ADR 6: Native Prebuild for MMKV Storage (Latest Mobile Stack)
 * **Context**: Fast local persistence for favorites and offline caching.
-* **Decision**: Standardize on the latest **Expo SDK 57** (`~57.0.24`), **React Native 0.86.3**, **React 19.2.3**, and **Node 24** (`v24.21.0`), using `react-native-mmkv` with `npx expo run:android` via `expo prebuild`.
+* **Decision**: Standardize on the latest **Expo SDK 57** (`~57.0.24`), **React Native 0.86.3**, **React 19.2.3**, using `react-native-mmkv` with `npx expo run:android` / `npx expo run:ios` via `expo prebuild`.
 * **Rationale**:
   * MMKV uses direct C++ JSI / Nitro bindings, operating ~30x faster than legacy AsyncStorage.
   * Synchronous reads eliminate layout shifts on app launch.
-  * Stock Expo Go does not support native C++ JSI modules, so native prebuild is explicitly required.
+  * Stock Expo Go does not bundle custom native C++ JSI modules, so native prebuild is explicitly required.
   * Expo SDK 57 and React Native 0.86 bring modern TurboModule architecture and Hermes engine optimizations by default.
+
+### ADR 7: Expo Router & FlashList for High-Performance Mobile Client
+* **Context**: Scalable mobile navigation, modern React Native architecture, and high-cadence list rendering.
+* **Decision**: Adopt **Expo Router** file-based navigation (`app/`) alongside `@shopify/flash-list`, Google Fonts (`@expo-google-fonts/hanken-grotesk`, `inter`, `jetbrains-mono`), and Reactotron JS-level network inspection.
+* **Rationale**:
+  * File-based routing organizes screens declaratively into groups (`(drawer)`, `(tabs)`) with automatic deep linking.
+  * `@shopify/flash-list` recycles native platform views rather than destroying/recreating them, eliminating frame drops during frequent price updates.
+  * Loading Google Fonts via `useFonts()` and referencing registered PostScript names ensures cross-platform visual consistency on both Android and iOS without font clipping.
+  * In React Native New Architecture Bridgeless mode, standard Chrome DevTools network hooks may report multiple host conflicts; Reactotron intercepts network requests directly in JavaScript without relying on C++ CDT host hooks.
 
 ---
 
@@ -117,3 +126,4 @@ In a 1,000,000+ concurrent user production deployment:
 2. **Multicast Fan-Out Backbone**: An in-memory pub/sub bus (NATS Core or Redis Cluster Pub/Sub) distributes ticks to edge gateway pods in <0.5ms.
 3. **Stateless Gateway Fleet**: 50–100 Fastify + `ws` gateway pods behind an AWS ALB or Envoy Gateway, autoscaled dynamically via KEDA on `pulsecrypto_ws_active_clients` (target: 10,000 connections/pod).
 4. **Graceful Draining**: Kubernetes `preStop` lifecycle hooks gradually disconnect sockets over a 60-second window during deployments to eliminate "Thundering Herd" reconnection storms.
+5. **Fleet Observability & Alerting**: Production Prometheus agents scrape `GET /metrics` across the gateway pod fleet to monitor aggregated conflation latency, client socket pools, and tier-3 backpressure sheds into central SRE dashboards (Grafana/Datadog), while client-side telemetry is monitored directly via in-app diagnostics.

@@ -8,7 +8,7 @@ describe('BinanceConnector Ingestion & Resiliency (Task T2.2)', () => {
   let serverPort: number;
 
   beforeEach(async () => {
-    mockServer = new WebSocketServer({ port: 0 });
+    mockServer = new WebSocketServer({ port: 0, host: '127.0.0.1' });
     await new Promise<void>((resolve) => {
       mockServer.on('listening', () => {
         const addr = mockServer.address();

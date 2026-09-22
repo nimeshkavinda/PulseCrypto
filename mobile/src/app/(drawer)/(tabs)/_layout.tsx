@@ -1,27 +1,24 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import type { DrawerNavigationProp } from '@react-navigation/drawer';
-import { useNavigation } from '@react-navigation/native';
+import { Tabs } from 'expo-router';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from 'expo-router';
+import { DrawerActions } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomTabParamList, RootDrawerParamList } from './types';
-import { TerminalScreen } from '../screens/TerminalScreen';
-import { MarketsScreen } from '../screens/MarketsScreen';
-import { TelemetryScreen } from '../screens/TelemetryScreen';
-import { SettingsScreen } from '../screens/SettingsScreen';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens';
+import { colors, typography, spacing } from '../../../theme/tokens';
+import { styles } from '../../../components/navigation/TabBar.styles';
 
-const Tab = createBottomTabNavigator<BottomTabParamList>();
-
-export function MainTabNavigator() {
-  const drawerNavigation = useNavigation<DrawerNavigationProp<RootDrawerParamList>>();
+export default function TabLayout() {
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   const renderHeaderLeft = () => (
     <TouchableOpacity
       style={styles.headerButton}
-      onPress={() => drawerNavigation.openDrawer()}
+      onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
       activeOpacity={0.7}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      accessibilityRole="button"
+      accessibilityLabel="Open navigation menu"
     >
       <Ionicons name="menu-outline" size={24} color={colors.textPrimary} />
     </TouchableOpacity>
@@ -30,13 +27,12 @@ export function MainTabNavigator() {
   const renderHeaderRight = () => (
     <View style={styles.statusPill}>
       <View style={styles.liveDot} />
-      <Text style={styles.statusPillText}>Live 100ms</Text>
+      <Text style={styles.statusPillText}>LIVE</Text>
     </View>
   );
 
   return (
-    <Tab.Navigator
-      initialRouteName="Terminal"
+    <Tabs
       screenOptions={{
         headerStyle: {
           backgroundColor: colors.surface,
@@ -49,6 +45,7 @@ export function MainTabNavigator() {
           color: colors.textPrimary,
           fontSize: typography.fontSize.subtitle,
           fontWeight: typography.fontWeight.bold,
+          fontFamily: typography.fontFamily.heading,
         },
         headerLeft: renderHeaderLeft,
         headerRight: renderHeaderRight,
@@ -57,8 +54,8 @@ export function MainTabNavigator() {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: spacing.sm,
+          height: 54 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, spacing.xs),
           paddingTop: spacing.xs,
         },
         tabBarActiveTintColor: colors.bidGreen,
@@ -66,79 +63,50 @@ export function MainTabNavigator() {
         tabBarLabelStyle: {
           fontSize: typography.fontSize.caption,
           fontWeight: typography.fontWeight.medium,
+          fontFamily: typography.fontFamily.medium,
         },
       }}
     >
-      <Tab.Screen
-        name="Terminal"
-        component={TerminalScreen}
+      <Tabs.Screen
+        name="index"
         options={{
           title: 'Terminal',
+          tabBarLabel: 'Terminal',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="stats-chart-outline" size={size} color={color} />
           ),
         }}
       />
-      <Tab.Screen
-        name="Markets"
-        component={MarketsScreen}
+      <Tabs.Screen
+        name="markets"
         options={{
           title: 'Markets',
+          tabBarLabel: 'Markets',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
           ),
         }}
       />
-      <Tab.Screen
-        name="Telemetry"
-        component={TelemetryScreen}
+      <Tabs.Screen
+        name="telemetry"
         options={{
           title: 'Telemetry',
+          tabBarLabel: 'Telemetry',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="speedometer-outline" size={size} color={color} />
           ),
         }}
       />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
+      <Tabs.Screen
+        name="settings"
         options={{
           title: 'Settings',
+          tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />
-    </Tab.Navigator>
+    </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  headerButton: {
-    marginLeft: spacing.lg,
-    padding: spacing.xs,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.lg,
-    backgroundColor: colors.bidGreenSubtle,
-    borderColor: colors.bidGreen,
-    borderWidth: 1,
-    borderRadius: borderRadius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.bidGreen,
-    marginRight: spacing.xs,
-  },
-  statusPillText: {
-    color: colors.bidGreen,
-    fontSize: typography.fontSize.caption,
-    fontWeight: typography.fontWeight.bold,
-  },
-});

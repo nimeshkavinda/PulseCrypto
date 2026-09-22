@@ -26,16 +26,16 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ## Phase 3: Mobile Foundation, Design Tokens & Shell
 - [x] **T3.1**: Initialize Expo React Native mobile project with TypeScript configured for native prebuild (`npx expo run:android`).
 - [x] **T3.2**: Implement Design System token module (colors `#0B0E14`, `#00C57A`, `#FF3B69`, `#1E2633`, typography, spacing).
-- [x] **T3.3**: Set up React Navigation: Pro Trader Side Drawer (static UI layout chrome matching Mockup 3) + 4 Bottom Tabs (Terminal, Markets, Telemetry, Settings).
+- [x] **T3.3**: Set up Expo Router file-based architecture (`mobile/app/`): Pro Trader Side Drawer (`(drawer)/_layout.tsx`) + 4 Bottom Tabs (`(tabs)/_layout.tsx` for Terminal, Markets, Telemetry, Settings), with custom Google Fonts (`@expo-google-fonts/hanken-grotesk`, `inter`, `jetbrains-mono`), safe area insets, and Reactotron mobile network inspection.
 - [x] **T3.4**: Implement `StorageRepository` using `react-native-mmkv` for synchronous local persistence.
 
 ---
 
 ## Phase 4: Markets Watchlist, Search, Filter & Favourites
-- [ ] **T4.1**: Build Market Watchlist screen displaying all supported trading pairs (BTC, ETH, SOL, DOGE, XRP).
-- [ ] **T4.2**: Implement search and filter bar for trading pairs.
-- [ ] **T4.3**: Implement Favourites toggle with MMKV persistence and automatic restoration on startup.
-- [ ] **T4.4**: Integrate TanStack Query (`@tanstack/react-query`) for `GET /pairs/meta` with pull-to-refresh (`refetch()` on `RefreshControl`) without interrupting active WebSocket streaming.
+- [x] **T4.1**: Build Market Watchlist screen displaying all supported trading pairs (BTC, ETH, SOL, DOGE, XRP) using `@shopify/flash-list` for 60 FPS virtualization, with separated component styling (`*.styles.ts`).
+- [x] **T4.2**: Implement search and filter bar for trading pairs.
+- [x] **T4.3**: Implement Favourites toggle with MMKV persistence and automatic restoration on startup.
+- [x] **T4.4**: Integrate TanStack Query (`@tanstack/react-query`) for `GET /pairs/meta` with pull-to-refresh (`refetch()` on `RefreshControl`) without interrupting active WebSocket streaming.
 
 ---
 
@@ -44,16 +44,23 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [ ] **T5.2**: Build Live Order Book table (top 10 bids in green, top 10 asks in red) with animated volume depth bars.
 - [ ] **T5.3**: Implement UI-thread price flash micro-animations (green for tick up, red for tick down via Reanimated).
 - [ ] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with safety-floored redraw cadence (`Math.max(sliderValue, 250)`), Liquidity Gap badge, and Buy/Sell Pressure ratio.
+- [ ] **T5.5**: Gateway Connection & Navigation Integration:
+  - Wire header `LIVE` status pill to active WebSocket connectivity state.
+  - Consolidate gateway URL resolution into a single reactive URL utility module (`marketApi.resolveHttpBaseUrl` vs `storage.getHttpGatewayUrl`).
+  - Subscribe `usePairsMetadata` to storage so Settings gateway edits trigger query invalidation without component remount.
 
 ---
 
-## Phase 6: System Settings & In-App Telemetry Dashboard
+## Phase 6: System Settings & Telemetry Dashboard (Mobile & Backend Observability)
 - [ ] **T6.1**: Implement Client-Side Data Throttling Configurator slider (10ms–1000ms) to tune client render/flush frequency.
 - [ ] **T6.2**: Implement live Telemetry Performance Dashboard:
   - Circular JS Thread Frame Rate gauge (real-time FPS measurement via SVG).
   - Ingestion rate counter (msgs/sec).
   - Memory Footprint Sparkline chart (SVG path).
   - Hardware Acceleration & Storage cards adapted to native platform concepts ("Hermes / JSI Engine: Active", "MMKV Cache: X KB utilized").
+- [ ] **T6.3**: Backend Logging & Production Telemetry Documentation:
+  - Configure structured JSON logging via Fastify's built-in Pino logger (`fastify.log`) with request ID tracing and log redaction.
+  - Document production fleet observability (Prometheus scraping existing `GET /metrics` + centralized Grafana/Datadog dashboards) in README / architecture reference without auxiliary Docker Compose bloat.
 
 ---
 
@@ -61,6 +68,11 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [ ] **T7.1**: Implement resilient WebSocket client with exponential backoff reconnection, ping/pong health monitoring, and offline indicator.
 - [ ] **T7.2**: Implement stale data cache: maintain most recent market data on screen if backend connection drops.
 - [ ] **T7.3**: Verify on Android Emulator and ensure smooth 60 FPS operation under sustained 100ms update bursts.
+- [ ] **T7.4**: Mobile Lifecycle, Resiliency & Testing Hardening:
+  - Wire per-row SYNCED / LIVE indicators to real streaming status.
+  - Implement focus-aware polling (`useFocusEffect` / app background pause) to avoid redundant background network calls.
+  - Move dev-only tooling (`reactotron-react-native`) to `devDependencies`.
+  - Add hook and component integration tests: `useFavorites` toggle + restore, `FlashList` render, and pull-to-refresh refetch path with `QueryClientProvider` wrapper.
 
 ---
 
