@@ -23,7 +23,7 @@ import {
   JetBrainsMono_500Medium,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
-import '../src/devtools/reactotron';
+import '../devtools/reactotron';
 
 // Keep the splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync().catch(() => {});

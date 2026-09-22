@@ -1,7 +1,21 @@
-import { StyleSheet } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
-export const styles = StyleSheet.create({
+export default function SecurityScreen() {
+  return (
+    <View style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>Security & Authentication</Text>
+        <Text style={styles.subtitle}>
+          Two-factor authentication (2FA), biometric login, and active session management.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primary,
@@ -18,24 +32,9 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     maxWidth: 360,
   },
-  badge: {
-    backgroundColor: colors.bidGreenSubtle,
-    borderColor: colors.bidGreen,
-    borderWidth: 1,
-    borderRadius: borderRadius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  badgeText: {
-    color: colors.bidGreen,
-    fontSize: typography.fontSize.caption,
-    fontWeight: typography.fontWeight.bold,
-    fontFamily: typography.fontFamily.bold,
-  },
   title: {
     color: colors.textPrimary,
-    fontSize: typography.fontSize.title,
+    fontSize: typography.fontSize.subtitle,
     fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.heading,
     marginBottom: spacing.sm,

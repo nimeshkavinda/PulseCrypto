@@ -8,21 +8,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
-import { useNavigation } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useRouter } from 'expo-router';
 import { PairMetadata } from '@pulsecrypto/shared';
-import { colors } from '../theme/tokens';
-import { usePairsMetadata } from '../hooks/usePairsMetadata';
-import { useFavorites } from '../hooks/useFavorites';
-import { MarketPairCard } from './watchlist/MarketPairCard';
-import { MarketFilterBar } from './watchlist/MarketFilterBar';
-import { filterAndSortPairs, MarketFilterTab } from './watchlist/filterUtils';
-import { defaultStorage } from '../storage/storageRepository';
-import type { BottomTabParamList } from '../navigation/types';
-import { styles } from './MarketsScreen.styles';
+import { colors } from '../../theme/tokens';
+import { usePairsMetadata } from '../../hooks/usePairsMetadata';
+import { useFavorites } from '../../hooks/useFavorites';
+import { MarketPairCard } from './MarketPairCard';
+import { MarketFilterBar } from './MarketFilterBar';
+import { filterAndSortPairs, MarketFilterTab } from './filterUtils';
+import { defaultStorage } from '../../storage/storageRepository';
+import { styles } from './WatchlistScreen.styles';
 
-export function MarketsScreen() {
-  const navigation = useNavigation<BottomTabNavigationProp<BottomTabParamList, 'Markets'>>();
+export function WatchlistScreen() {
+  const router = useRouter();
   const { data: pairs, isRefetching, refetch, isLoading } = usePairsMetadata();
   const [favorites, toggleFavorite] = useFavorites();
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -31,9 +29,9 @@ export function MarketsScreen() {
   const handleSelectPair = useCallback(
     (symbol: string) => {
       defaultStorage.setActivePair(symbol);
-      navigation.navigate('Terminal', { symbol });
+      router.navigate({ pathname: '/', params: { symbol } });
     },
-    [navigation]
+    [router]
   );
 
   const displayedPairs = useMemo(
@@ -60,7 +58,7 @@ export function MarketsScreen() {
       return (
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color={colors.bidGreen} />
-          <Text style={styles.emptyText}>Loading markets...</Text>
+          <Text style={[styles.emptyText, { marginTop: 16 }]}>Loading live market pairs...</Text>
         </View>
       );
     }
@@ -70,30 +68,14 @@ export function MarketsScreen() {
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyTitle}>No Favourites Yet</Text>
           <Text style={styles.emptyText}>
-            Tap the star icon on any pair to add it to your favourites watchlist.
+            Tap the star icon on any trading pair to add it to your quick-access favourites watchlist.
           </Text>
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={() => setActiveTab('ALL')}
+            activeOpacity={0.7}
           >
-            <Text style={styles.emptyButtonText}>View All Pairs</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    if (searchQuery.trim().length > 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>No Matching Pairs</Text>
-          <Text style={styles.emptyText}>
-            No results found for &ldquo;{searchQuery}&rdquo;.
-          </Text>
-          <TouchableOpacity
-            style={styles.emptyButton}
-            onPress={() => setSearchQuery('')}
-          >
-            <Text style={styles.emptyButtonText}>Clear Search</Text>
+            <Text style={styles.emptyButtonText}>View All Markets</Text>
           </TouchableOpacity>
         </View>
       );
@@ -101,31 +83,30 @@ export function MarketsScreen() {
 
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No trading pairs available</Text>
+        <Text style={styles.emptyTitle}>No Matching Pairs</Text>
+        <Text style={styles.emptyText}>
+          No trading pairs matched your search criteria for &ldquo;{searchQuery}&rdquo;.
+        </Text>
       </View>
     );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      {/* Header Bar */}
+      {/* Watchlist Section Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Markets Watchlist</Text>
+          <Text style={styles.headerTitle}>Spot Markets</Text>
           <Text style={styles.headerSubtitle}>
-            {displayedPairs.length} of {pairs.length} pairs
+            {displayedPairs.length} active streaming pairs
           </Text>
         </View>
-
-        {isRefetching && (
-          <View style={styles.syncBadge}>
-            <ActivityIndicator size="small" color={colors.bidGreen} />
-            <Text style={styles.syncText}>SYNCING</Text>
-          </View>
-        )}
+        <View style={styles.syncBadge}>
+          <Text style={styles.syncText}>SYNCED</Text>
+        </View>
       </View>
 
-      {/* Search and Filter Tabs */}
+      {/* Search & Filter Bar */}
       <MarketFilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -134,23 +115,21 @@ export function MarketsScreen() {
         favoritesCount={favorites.length}
       />
 
-      {/* High-Performance Recycling FlashList */}
+      {/* High-Performance Virtualized Pair List */}
       <FlashList
         data={displayedPairs}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContent}
-        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={renderEmptyComponent}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
             tintColor={colors.bidGreen}
             colors={[colors.bidGreen]}
-            progressBackgroundColor={colors.surface}
           />
         }
-        ListEmptyComponent={renderEmptyComponent}
       />
     </SafeAreaView>
   );

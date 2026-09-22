@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens';
+import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
 export const styles = StyleSheet.create({
   headerButton: {

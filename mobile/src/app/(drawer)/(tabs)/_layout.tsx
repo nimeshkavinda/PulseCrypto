@@ -4,8 +4,8 @@ import { useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography, spacing } from '../../../src/theme/tokens';
-import { styles } from '../../../src/navigation/MainTabNavigator.styles';
+import { colors, typography, spacing } from '../../../theme/tokens';
+import { styles } from '../../../components/navigation/TabBar.styles';
 
 export default function TabLayout() {
   const navigation = useNavigation();
