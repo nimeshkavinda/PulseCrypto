@@ -2,8 +2,36 @@
   "name": "@pulsecrypto/mobile",
   "version": "1.0.0",
   "private": true,
-  "description": "PulseCrypto React Native Mobile Application",
+  "description": "PulseCrypto Real-Time Cryptocurrency Market Mobile Application",
+  "main": "index.ts",
   "scripts": {
-    "test": "echo \"Mobile tests will be configured in Phase 3 (T3.1)\" && exit 0"
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@pulsecrypto/shared": "*",
+    "@react-navigation/bottom-tabs": "^7.19.2",
+    "@react-navigation/drawer": "^7.14.2",
+    "@react-navigation/native": "^7.4.1",
+    "expo": "~57.0.24",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "^3.3.0",
+    "react-native-mmkv": "^4.3.2",
+    "react-native-reanimated": "^4.7.0",
+    "react-native-safe-area-context": "^5.10.0",
+    "react-native-screens": "^4.28.0",
+    "react-native-svg": "^15.15.5"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~5.7.3",
+    "vitest": "^3.0.6"
   }
 }

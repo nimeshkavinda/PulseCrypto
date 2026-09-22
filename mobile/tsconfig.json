@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@pulsecrypto/shared": ["../shared/src/index.ts"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "App.tsx",
+    "index.ts"
+  ]
+}

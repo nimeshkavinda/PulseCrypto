@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "PulseCrypto",
+    "slug": "pulsecrypto",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0B0E14",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pulsecrypto.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0E14"
+      },
+      "package": "com.pulsecrypto.mobile"
+    },
+    "plugins": [
+      "react-native-reanimated"
+    ]
+  }
+}

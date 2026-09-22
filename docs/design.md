@@ -99,13 +99,14 @@ This document details the architectural design and Architecture Decision Records
   * Decoupling the depth chart redraw (minimum 250ms floor) ensures the heaviest visual component never competes with message parsing on the JS thread during burst updates.
   * Completely avoids `@shopify/react-native-skia`'s 20MB native binary bloat while matching 100% of Mockup 3's visual styling.
 
-### ADR 6: Native Prebuild for MMKV Storage
+### ADR 6: Native Prebuild for MMKV Storage (Latest Mobile Stack)
 * **Context**: Fast local persistence for favorites and offline caching.
-* **Decision**: Use `react-native-mmkv` with `npx expo run:android` via `expo prebuild`.
+* **Decision**: Standardize on the latest **Expo SDK 57** (`~57.0.24`), **React Native 0.86.3**, **React 19.2.3**, and **Node 24** (`v24.21.0`), using `react-native-mmkv` with `npx expo run:android` via `expo prebuild`.
 * **Rationale**:
-  * MMKV uses C++ JSI direct memory bindings, operating ~30x faster than AsyncStorage.
+  * MMKV uses direct C++ JSI / Nitro bindings, operating ~30x faster than legacy AsyncStorage.
   * Synchronous reads eliminate layout shifts on app launch.
   * Stock Expo Go does not support native C++ JSI modules, so native prebuild is explicitly required.
+  * Expo SDK 57 and React Native 0.86 bring modern TurboModule architecture and Hermes engine optimizations by default.
 
 ---
 
