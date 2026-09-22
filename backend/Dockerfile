@@ -5,21 +5,22 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package descriptors for caching
+# Optimize layer caching: copy workspace package manifests first
+COPY package*.json ./
 COPY shared/package*.json ./shared/
 COPY backend/package*.json ./backend/
+COPY mobile/package*.json ./mobile/
 
-# Install dependencies and compile shared library
-WORKDIR /app/shared
-RUN npm install
-COPY shared/ ./
-RUN npm run build
+# Clean install all dependencies (including devDependencies for build tools)
+RUN npm ci
 
-# Install dependencies and compile backend gateway
-WORKDIR /app/backend
-RUN npm install
-COPY backend/ ./
-RUN npm run build
+# Copy application source trees
+COPY shared/ ./shared/
+COPY backend/ ./backend/
+
+# Compile TypeScript packages
+RUN npm --prefix shared run build
+RUN npm --prefix backend run build
 
 # ==============================================================================
 # Stage 2: Production Runner
@@ -33,15 +34,20 @@ ENV PORT=8080
 ENV HOST=0.0.0.0
 ENV FLUSH_INTERVAL_MS=100
 
-# Copy compiled shared package and runtime artifacts
-COPY --from=builder /app/shared/package*.json ./shared/
-COPY --from=builder /app/shared/dist ./shared/dist
-COPY --from=builder /app/shared/node_modules ./shared/node_modules
+# Install production dependencies only (never copy node_modules across stages)
+COPY package*.json ./
+COPY shared/package*.json ./shared/
+COPY backend/package*.json ./backend/
+COPY mobile/package*.json ./mobile/
 
-# Copy compiled backend and production dependencies
-COPY --from=builder /app/backend/package*.json ./backend/
+RUN npm ci --omit=dev
+
+# Copy compiled JavaScript bundles and type definitions from builder
+COPY --from=builder /app/shared/dist ./shared/dist
 COPY --from=builder /app/backend/dist ./backend/dist
-COPY --from=builder /app/backend/node_modules ./backend/node_modules
+
+# Secure ownership for unprivileged node user
+RUN chown -R node:node /app
 
 EXPOSE 8080
 
@@ -50,4 +56,4 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
 
 USER node
 
-CMD ["node", "backend/dist/index.js"]
+CMD ["node", "backend/dist/server.js"]
