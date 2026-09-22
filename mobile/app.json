@@ -19,9 +19,6 @@
         "backgroundColor": "#0B0E14"
       },
       "package": "com.pulsecrypto.mobile"
-    },
-    "plugins": [
-      "react-native-reanimated"
-    ]
+    }
   }
 }

@@ -78,7 +78,9 @@ async function main() {
 
   try {
     await server.listen({ port, host });
-    server.log.info(`[PulseCrypto Gateway] Server running on http://${host}:${port}`);
+    server.log.info(`[PulseCrypto Gateway] HTTP server running on http://${host}:${port}`);
+    server.log.info(`[PulseCrypto Gateway] WebSocket gateway ready: ws://${host}:${port}/ws`);
+    server.log.info(`[PulseCrypto Gateway] Conflation cadence: ${conflator.flushIntervalMs}ms (FLUSH_INTERVAL_MS)`);
   } catch (err) {
     server.log.error(err, '[PulseCrypto Gateway] Startup error');
     process.exit(1);

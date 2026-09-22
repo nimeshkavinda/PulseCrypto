@@ -134,7 +134,7 @@ export class StorageRepository {
 
   public getGatewayUrl(): string {
     const val = this.get<string>(STORAGE_KEYS.GATEWAY_URL);
-    return val || DEFAULT_GATEWAY_URL;
+    return val || process.env.EXPO_PUBLIC_GATEWAY_URL || DEFAULT_GATEWAY_URL;
   }
 
   public setGatewayUrl(url: string): void {

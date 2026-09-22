@@ -9,7 +9,9 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "paths": {
-      "@pulsecrypto/shared": ["../shared/src/index.ts"]
+      "@pulsecrypto/shared": [
+        "../shared/src/index.ts"
+      ]
     }
   },
   "include": [
@@ -17,5 +19,6 @@
     "tests/**/*",
     "App.tsx",
     "index.ts"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

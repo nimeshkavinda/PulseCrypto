@@ -6,7 +6,8 @@ export interface HealthRoutesOptions {
 }
 
 export async function healthRoutes(app: FastifyInstance, options: HealthRoutesOptions): Promise<void> {
-  app.get('/health', async () => {
+  app.get('/health', async (request) => {
+    request.log.info('[Health] Heartbeat probe checked');
     return {
       status: 'ok',
       uptime: process.uptime(),

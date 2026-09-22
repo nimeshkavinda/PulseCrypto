@@ -56,4 +56,45 @@ describe('StorageRepository Synchronous Persistence (Task T3.4)', () => {
     storage.delete('test_key');
     expect(storage.get('test_key')).toBeNull();
   });
+
+  it('should retrieve default gateway URL when unset', () => {
+    const originalEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
+    delete process.env.EXPO_PUBLIC_GATEWAY_URL;
+    try {
+      expect(storage.getGatewayUrl()).toBe('ws://10.0.2.2:8080/ws');
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.EXPO_PUBLIC_GATEWAY_URL = originalEnv;
+      }
+    }
+  });
+
+  it('should prioritize EXPO_PUBLIC_GATEWAY_URL env variable over default when unset in storage', () => {
+    const originalEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
+    try {
+      process.env.EXPO_PUBLIC_GATEWAY_URL = 'ws://192.168.1.100:8080/ws';
+      expect(storage.getGatewayUrl()).toBe('ws://192.168.1.100:8080/ws');
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.EXPO_PUBLIC_GATEWAY_URL = originalEnv;
+      } else {
+        delete process.env.EXPO_PUBLIC_GATEWAY_URL;
+      }
+    }
+  });
+
+  it('should prioritize explicit storage override over EXPO_PUBLIC_GATEWAY_URL and default', () => {
+    const originalEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
+    try {
+      process.env.EXPO_PUBLIC_GATEWAY_URL = 'ws://192.168.1.100:8080/ws';
+      storage.setGatewayUrl('ws://custom-domain.com:8080/ws');
+      expect(storage.getGatewayUrl()).toBe('ws://custom-domain.com:8080/ws');
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.EXPO_PUBLIC_GATEWAY_URL = originalEnv;
+      } else {
+        delete process.env.EXPO_PUBLIC_GATEWAY_URL;
+      }
+    }
+  });
 });

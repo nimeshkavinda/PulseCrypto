@@ -9,6 +9,8 @@
     "mobile"
   ],
   "scripts": {
+    "dev": "concurrently -k --names \"backend,mobile\" -c \"blue.bold,magenta.bold\" \"npm:dev:backend\" \"npm:dev:mobile\"",
+    "dev:docker": "concurrently -k --names \"docker-be,mobile\" -c \"cyan.bold,magenta.bold\" \"docker compose up\" \"npm:dev:mobile\"",
     "dev:backend": "npm --prefix backend run dev",
     "dev:mobile": "npm --prefix mobile start",
     "build:shared": "npm --prefix shared run build",
@@ -34,6 +36,7 @@
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.5",
     "eslint": "^10.11.0",
     "typescript-eslint": "^8.70.1"
   }
