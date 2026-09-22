@@ -1,8 +1,13 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import websocket from '@fastify/websocket';
+import { defaultMetadataService, MetadataService } from './metadata.js';
+import { defaultMetrics, MetricsRegistry } from './metrics.js';
 
 export interface AppOptions {
   enableLogger?: boolean;
+  metadataService?: MetadataService;
+  metricsRegistry?: MetricsRegistry;
 }
 
 /**
@@ -12,6 +17,8 @@ export interface AppOptions {
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV !== 'production';
   const shouldLog = options.enableLogger ?? isDev;
+  const metadata = options.metadataService ?? defaultMetadataService;
+  const metrics = options.metricsRegistry ?? defaultMetrics;
 
   const app = Fastify({
     logger: shouldLog
@@ -28,6 +35,8 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     methods: ['GET', 'POST', 'OPTIONS'],
   });
 
+  await app.register(websocket);
+
   // Health check endpoint (satisfies Docker healthcheck & monitoring)
   app.get('/health', async () => {
     return {
@@ -35,6 +44,17 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       uptime: process.uptime(),
       timestamp: Date.now(),
     };
+  });
+
+  // REST Trading pairs metadata (Part 1, Section 4 of brief)
+  app.get('/pairs/meta', async () => {
+    return metadata.getAll();
+  });
+
+  // Prometheus exposition metrics
+  app.get('/metrics', async (_req, reply) => {
+    reply.header('Content-Type', metrics.getContentType());
+    return metrics.getMetrics();
   });
 
   return app;
