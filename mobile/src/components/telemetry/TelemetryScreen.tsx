@@ -10,7 +10,18 @@ import { styles } from './TelemetryScreen.styles';
 
 export function TelemetryScreen() {
   const { ingestionRate, latencyMs, resetMetrics, connectionStatus } = useMarketConnection();
-  const { storageStats } = useSettings();
+  const { storageStats, gatewayUrl } = useSettings();
+
+  // Extract the host portion from the gateway URL for display (e.g. "192.168.1.6")
+  const gatewayHost = (() => {
+    try {
+      const cleaned = gatewayUrl.replace(/^wss?:\/\//, '');
+      const host = cleaned.split(/[:/]/)[0];
+      return host || 'Local Gateway';
+    } catch {
+      return 'Local Gateway';
+    }
+  })();
 
   const handleReset = useCallback(() => {
     resetMetrics();
@@ -105,7 +116,7 @@ export function TelemetryScreen() {
         <View>
           <Text style={[styles.infoCategory, { color: '#FF6B8B' }]}>API LATENCY</Text>
           <Text style={styles.infoTitle}>
-            Avg Ping: {latencyMs > 0 ? `${latencyMs}ms` : '14ms'} (London-1)
+            Avg Ping: {latencyMs > 0 ? `${latencyMs}ms` : '<1ms'} ({gatewayHost})
           </Text>
         </View>
       </View>

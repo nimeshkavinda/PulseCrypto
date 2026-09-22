@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -43,37 +43,43 @@ export function SettingsScreen() {
   const currentRatio = Math.max(0, Math.min(1, (throttleMs - 10) / 990));
   const thumbPosition = currentRatio * sliderWidth;
 
-  const handleTouchAtX = useCallback(
-    (x: number) => {
-      if (sliderWidth <= 0) return;
-      const ratio = Math.max(0, Math.min(1, x / sliderWidth));
-      const rawMs = 10 + ratio * 990;
-      // Round to nearest 10ms
-      const roundedMs = Math.round(rawMs / 10) * 10;
-      setThrottle(roundedMs);
-    },
-    [sliderWidth, setThrottle]
+  // Use refs so PanResponder handlers always read current values
+  const sliderWidthRef = useRef(sliderWidth);
+  sliderWidthRef.current = sliderWidth;
+  const setThrottleRef = useRef(setThrottle);
+  setThrottleRef.current = setThrottle;
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => {
+          const w = sliderWidthRef.current;
+          if (w <= 0) return;
+          const x = evt.nativeEvent.locationX;
+          const ratio = Math.max(0, Math.min(1, x / w));
+          const rawMs = 10 + ratio * 990;
+          setThrottleRef.current(Math.round(rawMs / 10) * 10);
+        },
+        onPanResponderMove: (evt) => {
+          const w = sliderWidthRef.current;
+          if (w <= 0) return;
+          const x = evt.nativeEvent.locationX;
+          const ratio = Math.max(0, Math.min(1, x / w));
+          const rawMs = 10 + ratio * 990;
+          setThrottleRef.current(Math.round(rawMs / 10) * 10);
+        },
+      }),
+    []
   );
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        handleTouchAtX(evt.nativeEvent.locationX);
-      },
-      onPanResponderMove: (evt) => {
-        handleTouchAtX(evt.nativeEvent.locationX);
-      },
-    })
-  ).current;
-
-  const handleTrackLayout = (e: LayoutChangeEvent) => {
+  const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
-    if (w > 0 && Math.abs(w - sliderWidth) > 5) {
+    if (w > 0) {
       setSliderWidth(w);
     }
-  };
+  }, []);
 
   const handleSaveGateway = () => {
     const trimmed = inputUrl.trim();
@@ -101,7 +107,7 @@ export function SettingsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.screenTitle}>System Settings & Telemetry</Text>
+        <Text style={styles.screenTitle}>System Settings &amp; Telemetry</Text>
         <Text style={styles.screenSubtitle}>
           Real-time performance monitoring and data ingestion controls.
         </Text>
@@ -243,7 +249,7 @@ export function SettingsScreen() {
         <View style={styles.cardHeader}>
           <View>
             <Text style={[styles.cardCategory, { color: colors.textSecondary }]}>
-              STORAGE & CACHE
+              STORAGE &amp; CACHE
             </Text>
             <Text style={styles.cardTitle}>Persistence Management</Text>
           </View>

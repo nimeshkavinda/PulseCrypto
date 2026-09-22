@@ -29,10 +29,15 @@ export function useSettings(): UseSettingsResult {
     const unsubGateway = defaultStorage.subscribeGatewayUrl((url) => {
       setGatewayUrlState(url);
     });
+    // Re-read storage stats whenever any key is written/deleted
+    const unsubStorageChange = defaultStorage.subscribeStorageChange(() => {
+      setStorageStats(defaultStorage.getStorageStats());
+    });
 
     return () => {
       unsubThrottle();
       unsubGateway();
+      unsubStorageChange();
     };
   }, []);
 
@@ -66,11 +71,13 @@ export function useSettings(): UseSettingsResult {
   }, []);
 
   const clearCache = useCallback(() => {
+    defaultStorage.clearAll();
     defaultStorage.resetDefaults();
-    setStorageStats({ keysCount: 0, estimatedBytes: 0, estimatedKb: 0 });
-    setTimeout(() => {
-      setStorageStats(defaultStorage.getStorageStats());
-    }, 500);
+    setThrottleState(defaultStorage.getClientThrottle());
+    setGatewayUrlState(defaultStorage.getGatewayUrl());
+    setCompressionState(defaultStorage.getBinaryCompression());
+    setAdaptivePollingState(defaultStorage.getAdaptivePolling());
+    setStorageStats(defaultStorage.getStorageStats());
   }, []);
 
   return {

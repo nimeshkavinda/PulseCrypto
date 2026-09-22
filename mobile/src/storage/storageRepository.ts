@@ -102,6 +102,7 @@ export class StorageRepository {
   public set<T>(key: string, value: T): void {
     try {
       this.backend.set(key, JSON.stringify(value));
+      this.notifyStorageChange();
     } catch (err) {
       console.error(`[StorageRepository] Error writing key "${key}":`, err);
     }
@@ -109,10 +110,12 @@ export class StorageRepository {
 
   public delete(key: string): void {
     this.backend.delete(key);
+    this.notifyStorageChange();
   }
 
   public clearAll(): void {
     this.backend.clearAll();
+    this.notifyStorageChange();
   }
 
   // --- Strongly Typed Domain Accessors & Subscriptions ---
@@ -121,6 +124,24 @@ export class StorageRepository {
   private gatewayUrlListeners = new Set<(url: string) => void>();
   private throttleListeners = new Set<(throttleMs: number) => void>();
   private activePairListeners = new Set<(pair: string) => void>();
+  private storageChangeListeners = new Set<() => void>();
+
+  public subscribeStorageChange(listener: () => void): () => void {
+    this.storageChangeListeners.add(listener);
+    return () => {
+      this.storageChangeListeners.delete(listener);
+    };
+  }
+
+  private notifyStorageChange(): void {
+    for (const listener of this.storageChangeListeners) {
+      try {
+        listener();
+      } catch (err) {
+        console.error('[StorageRepository] Error in storageChange listener:', err);
+      }
+    }
+  }
 
   public subscribeFavorites(listener: (favorites: string[]) => void): () => void {
     this.favoritesListeners.add(listener);
