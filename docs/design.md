@@ -117,15 +117,6 @@ This document details the architectural design and Architecture Decision Records
   * Loading Google Fonts via `useFonts()` and referencing registered PostScript names ensures cross-platform visual consistency on both Android and iOS without font clipping.
   * In React Native New Architecture Bridgeless mode, standard Chrome DevTools network hooks may report multiple host conflicts; Reactotron intercepts network requests directly in JavaScript without relying on C++ CDT host hooks.
 
-### ADR 8: Pino Structured Logging & Prometheus/Grafana Observability
-* **Context**: Real-time production monitoring of gateway health, conflation latency, and client socket backpressure.
-* **Decision**: Couple Fastify's zero-overhead Pino JSON logger with Prometheus metrics (`GET /metrics` via `prom-client`) and an out-of-the-box pre-provisioned Grafana dashboard in `docker-compose.yml`.
-* **Rationale**:
-  * Pino is designed for high-throughput Node.js microservices with near-zero latency impact, logging structured JSON directly to stdout for log forwarders (Fluentd, Vector, Datadog).
-  * Pino is a logging stream, not a metrics aggregator or visualization dashboard.
-  * Prometheus scrapes numerical timeseries counters/gauges (`ws_messages_ingested_total`, `conflation_duration_seconds`, `active_ws_connections`), while Grafana queries Prometheus to render real-time operational graphs.
-  * Pre-baking the Grafana datasource and dashboard JSON into Docker Compose allows reviewers to immediately visualize the backend streaming gateway at `http://localhost:3000` with zero manual configuration.
-
 ---
 
 ## 3. Production Scaling Architecture (At Scale Reference)

@@ -44,6 +44,10 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [ ] **T5.2**: Build Live Order Book table (top 10 bids in green, top 10 asks in red) with animated volume depth bars.
 - [ ] **T5.3**: Implement UI-thread price flash micro-animations (green for tick up, red for tick down via Reanimated).
 - [ ] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with safety-floored redraw cadence (`Math.max(sliderValue, 250)`), Liquidity Gap badge, and Buy/Sell Pressure ratio.
+- [ ] **T5.5**: Gateway Connection & Navigation Integration:
+  - Wire header `LIVE` status pill to active WebSocket connectivity state.
+  - Consolidate gateway URL resolution into a single reactive URL utility module (`marketApi.resolveHttpBaseUrl` vs `storage.getHttpGatewayUrl`).
+  - Subscribe `usePairsMetadata` to storage so Settings gateway edits trigger query invalidation without component remount.
 
 ---
 
@@ -64,6 +68,11 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [ ] **T7.1**: Implement resilient WebSocket client with exponential backoff reconnection, ping/pong health monitoring, and offline indicator.
 - [ ] **T7.2**: Implement stale data cache: maintain most recent market data on screen if backend connection drops.
 - [ ] **T7.3**: Verify on Android Emulator and ensure smooth 60 FPS operation under sustained 100ms update bursts.
+- [ ] **T7.4**: Mobile Lifecycle, Resiliency & Testing Hardening:
+  - Wire per-row SYNCED / LIVE indicators to real streaming status.
+  - Implement focus-aware polling (`useFocusEffect` / app background pause) to avoid redundant background network calls.
+  - Move dev-only tooling (`reactotron-react-native`) to `devDependencies`.
+  - Add hook and component integration tests: `useFavorites` toggle + restore, `FlashList` render, and pull-to-refresh refetch path with `QueryClientProvider` wrapper.
 
 ---
 
