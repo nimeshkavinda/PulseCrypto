@@ -110,7 +110,7 @@ export class StorageRepository {
 
   public getFavorites(): string[] {
     const favs = this.get<string[]>(STORAGE_KEYS.FAVORITES);
-    if (Array.isArray(favs) && favs.length > 0) {
+    if (Array.isArray(favs)) {
       return favs;
     }
     return DEFAULT_FAVORITES;

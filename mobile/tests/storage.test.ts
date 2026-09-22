@@ -19,6 +19,11 @@ describe('StorageRepository Synchronous Persistence (Task T3.4)', () => {
     expect(storage.getFavorites()).toEqual(['DOGEUSDT', 'XRPUSDT']);
   });
 
+  it('should allow empty favorites list and not revert to defaults', () => {
+    storage.setFavorites([]);
+    expect(storage.getFavorites()).toEqual([]);
+  });
+
   it('should toggle favorites accurately', () => {
     // Start with default ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
     expect(storage.isFavorite('BTCUSDT')).toBe(true);
