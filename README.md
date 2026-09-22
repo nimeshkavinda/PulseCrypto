@@ -50,19 +50,28 @@ This builds and runs the Fastify backend inside Docker on port `8080`, connected
 
 ### 3. Start the Mobile Terminal (Terminal 2)
 
+You have two ways to run the mobile app:
+
+#### Option A: Inside Expo Go (Zero compile time)
 ```bash
 npm run dev:mobile
 ```
+- Press **`a`** → opens on Android Emulator (`ws://10.0.2.2:8080/ws`)
+- Press **`i`** → opens on iOS Simulator (`ws://localhost:8080/ws`)
+- Scan QR code → opens on physical phone via Expo Go
 
-Once the interactive Expo terminal appears:
+#### Option B: Standalone Native App (Outside Expo Go)
+Compiles a dedicated native binary (`com.pulsecrypto.mobile`) with local Xcode / Android Gradle tooling:
+- **iOS Simulator (Native Build)**:
+  ```bash
+  npm run dev:mobile:ios
+  ```
+- **Android Emulator (Native Build)**:
+  ```bash
+  npm run dev:mobile:android
+  ```
 
-| Target | Key / Action | Gateway URL (auto-detected) |
-|---|---|---|
-| **Android Emulator** | Press **`a`** | `ws://10.0.2.2:8080/ws` |
-| **iOS Simulator** | Press **`i`** | `ws://localhost:8080/ws` |
-| **Physical Device** | Scan QR code with Expo Go | See below for LAN IP setup |
-
-The gateway URL is **automatically detected per platform** — zero configuration required for emulators and simulators.
+Gateway URLs are **automatically detected per platform** — zero configuration required for emulators and simulators.
 
 ---
 
@@ -103,7 +112,9 @@ All commands run from the monorepo root:
 | Command | Description |
 |---|---|
 | `npm run dev:backend` | Build and start backend inside Docker (`:8080`) |
-| `npm run dev:mobile` | Start Expo mobile Metro development server |
+| `npm run dev:mobile` | Start Expo mobile dev server (for Expo Go) |
+| `npm run dev:mobile:ios` | Build & run standalone native iOS app on simulator |
+| `npm run dev:mobile:android` | Build & run standalone native Android app on emulator |
 | `npm test` | Run all test suites (shared, backend, mobile) |
 | `npm run typecheck` | TypeScript type-check across all workspaces |
 | `npm run lint` | ESLint across all workspaces |
