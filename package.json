@@ -20,6 +20,10 @@
     "typecheck": "npm --prefix shared run typecheck && npm --prefix backend run typecheck && npm --prefix mobile run typecheck",
     "lint": "eslint shared backend mobile"
   },
+  "overrides": {
+    "react-native-reanimated": "4.5.1",
+    "react-native-worklets": "0.10.4"
+  },
   "keywords": [
     "cryptocurrency",
     "market-data",
