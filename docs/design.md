@@ -126,3 +126,4 @@ In a 1,000,000+ concurrent user production deployment:
 2. **Multicast Fan-Out Backbone**: An in-memory pub/sub bus (NATS Core or Redis Cluster Pub/Sub) distributes ticks to edge gateway pods in <0.5ms.
 3. **Stateless Gateway Fleet**: 50–100 Fastify + `ws` gateway pods behind an AWS ALB or Envoy Gateway, autoscaled dynamically via KEDA on `pulsecrypto_ws_active_clients` (target: 10,000 connections/pod).
 4. **Graceful Draining**: Kubernetes `preStop` lifecycle hooks gradually disconnect sockets over a 60-second window during deployments to eliminate "Thundering Herd" reconnection storms.
+5. **Fleet Observability & Alerting**: Production Prometheus agents scrape `GET /metrics` across the gateway pod fleet to monitor aggregated conflation latency, client socket pools, and tier-3 backpressure sheds into central SRE dashboards (Grafana/Datadog), while client-side telemetry is monitored directly via in-app diagnostics.

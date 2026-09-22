@@ -58,9 +58,9 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
   - Ingestion rate counter (msgs/sec).
   - Memory Footprint Sparkline chart (SVG path).
   - Hardware Acceleration & Storage cards adapted to native platform concepts ("Hermes / JSI Engine: Active", "MMKV Cache: X KB utilized").
-- [ ] **T6.3**: Backend Observability & Metrics Dashboard:
+- [ ] **T6.3**: Backend Logging & Production Telemetry Documentation:
   - Configure structured JSON logging via Fastify's built-in Pino logger (`fastify.log`) with request ID tracing and log redaction.
-  - Add Prometheus + Grafana service definitions to `docker-compose.yml` with pre-provisioned data sources and a pre-built crypto gateway dashboard (conflation latency, ws ingestion msg/sec, active client connections, memory RSS) accessible out-of-the-box at `http://localhost:3000`.
+  - Document production fleet observability (Prometheus scraping existing `GET /metrics` + centralized Grafana/Datadog dashboards) in README / architecture reference without auxiliary Docker Compose bloat.
 
 ---
 
