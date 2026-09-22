@@ -11,8 +11,8 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: 0,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
     marginBottom: spacing.xs,
   },
   headerTitle: {
