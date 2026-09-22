@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { PairMetadata } from '@pulsecrypto/shared';
 import { colors, typography, spacing, borderRadius } from '../theme/tokens';
 import { usePairsMetadata } from '../hooks/usePairsMetadata';
+import { useFavorites } from '../hooks/useFavorites';
 import { MarketPairCard } from './watchlist/MarketPairCard';
 import { MarketFilterBar } from './watchlist/MarketFilterBar';
 import { filterAndSortPairs, MarketFilterTab } from './watchlist/filterUtils';
@@ -23,19 +24,9 @@ import type { BottomTabParamList } from '../navigation/types';
 export function MarketsScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<BottomTabParamList, 'Markets'>>();
   const { data: pairs, isRefetching, refetch, isLoading } = usePairsMetadata();
-  const [favorites, setFavorites] = useState<string[]>(() => defaultStorage.getFavorites());
+  const [favorites, toggleFavorite] = useFavorites();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<MarketFilterTab>('ALL');
-
-  // Synchronize favorites from storage on mount
-  useEffect(() => {
-    setFavorites(defaultStorage.getFavorites());
-  }, []);
-
-  const handleToggleFavorite = useCallback((symbol: string) => {
-    defaultStorage.toggleFavorite(symbol);
-    setFavorites(defaultStorage.getFavorites());
-  }, []);
 
   const handleSelectPair = useCallback(
     (symbol: string) => {
@@ -55,11 +46,11 @@ export function MarketsScreen() {
       <MarketPairCard
         item={item}
         isFavorite={favorites.includes(item.symbol)}
-        onToggleFavorite={handleToggleFavorite}
+        onToggleFavorite={toggleFavorite}
         onPress={handleSelectPair}
       />
     ),
-    [favorites, handleToggleFavorite, handleSelectPair]
+    [favorites, toggleFavorite, handleSelectPair]
   );
 
   const keyExtractor = useCallback((item: PairMetadata) => item.symbol, []);

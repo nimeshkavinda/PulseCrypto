@@ -108,6 +108,25 @@ export class StorageRepository {
 
   // --- Strongly Typed Domain Accessors ---
 
+  private favoritesListeners = new Set<(favorites: string[]) => void>();
+
+  public subscribeFavorites(listener: (favorites: string[]) => void): () => void {
+    this.favoritesListeners.add(listener);
+    return () => {
+      this.favoritesListeners.delete(listener);
+    };
+  }
+
+  private notifyFavorites(favorites: string[]): void {
+    for (const listener of this.favoritesListeners) {
+      try {
+        listener(favorites);
+      } catch (err) {
+        console.error('[StorageRepository] Error in favorites listener:', err);
+      }
+    }
+  }
+
   public getFavorites(): string[] {
     const favs = this.get<string[]>(STORAGE_KEYS.FAVORITES);
     if (Array.isArray(favs)) {
@@ -118,6 +137,7 @@ export class StorageRepository {
 
   public setFavorites(favorites: string[]): void {
     this.set(STORAGE_KEYS.FAVORITES, favorites);
+    this.notifyFavorites(favorites);
   }
 
   public toggleFavorite(symbol: string): boolean {
