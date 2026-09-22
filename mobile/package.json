@@ -5,7 +5,7 @@
   "description": "PulseCrypto Real-Time Cryptocurrency Market Mobile Application",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
+    "start": "expo start -c",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "run:ios": "expo run:ios",
