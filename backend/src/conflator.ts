@@ -3,11 +3,11 @@ import {
   SupportedPairSymbol,
   SUPPORTED_PAIRS,
   MarketUpdatePayload,
-  ClientCommandSchema,
-  ClientCommand,
 } from '@pulsecrypto/shared';
 import { OrderBookManager, defaultOrderBookManager } from './orderbook.js';
 import { MetricsRegistry, defaultMetrics } from './metrics.js';
+import { loadConfig } from './config.js';
+import { handleClientMessage, sendSafe } from './ws/commands.js';
 
 export const BACKPRESSURE_THRESHOLDS = {
   SHED_DEPTH_BYTES: 512 * 1024,      // 512 KB
@@ -25,6 +25,7 @@ export interface ClientSession {
   subscribedPairs: Set<SupportedPairSymbol>;
   intervalMs: number;
   lastEmitTimestamp: number;
+  lastErrorTimestamp: number;
   isShedding: boolean;
 }
 
@@ -38,8 +39,7 @@ export class ConflationEngine {
   private isRunning = false;
 
   constructor(options: ConflatorOptions = {}) {
-    const envInterval = Number(process.env.FLUSH_INTERVAL_MS);
-    this.flushIntervalMs = options.flushIntervalMs ?? (isNaN(envInterval) || envInterval <= 0 ? 100 : envInterval);
+    this.flushIntervalMs = options.flushIntervalMs ?? loadConfig().FLUSH_INTERVAL_MS;
     this.orderBookManager = options.orderBookManager ?? defaultOrderBookManager;
     this.metrics = options.metrics ?? defaultMetrics;
   }
@@ -62,23 +62,20 @@ export class ConflationEngine {
   }
 
   /**
-   * Handle incoming WebSocket client connection
+   * Registers a new client socket session for broadcast conflation.
    */
-  public handleConnection(socket: WebSocket): void {
+  public registerClient(socket: WebSocket): ClientSession {
     const session: ClientSession = {
       socket,
       subscribedPairs: new Set(Object.keys(SUPPORTED_PAIRS) as SupportedPairSymbol[]),
       intervalMs: this.flushIntervalMs,
       lastEmitTimestamp: 0,
+      lastErrorTimestamp: 0,
       isShedding: false,
     };
 
     this.clients.add(session);
     this.metrics.connectedClients.set(this.clients.size);
-
-    socket.on('message', (data: WebSocket.RawData) => {
-      this.handleClientMessage(session, data);
-    });
 
     const cleanup = () => {
       this.clients.delete(session);
@@ -88,44 +85,19 @@ export class ConflationEngine {
 
     socket.on('close', cleanup);
     socket.on('error', cleanup);
+
+    return session;
   }
 
-  private handleClientMessage(session: ClientSession, rawData: WebSocket.RawData): void {
-    try {
-      const parsed = JSON.parse(rawData.toString());
-      const validation = ClientCommandSchema.safeParse(parsed);
-      if (!validation.success) {
-        session.socket.send(
-          JSON.stringify({ type: 'error', message: 'Invalid command payload', errors: validation.error.format() })
-        );
-        return;
-      }
+  /**
+   * Handles incoming WebSocket client connection and attaches message handler.
+   */
+  public handleConnection(socket: WebSocket): void {
+    const session = this.registerClient(socket);
 
-      const command: ClientCommand = validation.data;
-      switch (command.action) {
-        case 'setThrottle':
-          session.intervalMs = command.intervalMs;
-          break;
-
-        case 'subscribe':
-          for (const pair of command.pairs) {
-            session.subscribedPairs.add(pair);
-          }
-          break;
-
-        case 'unsubscribe':
-          for (const pair of command.pairs) {
-            session.subscribedPairs.delete(pair);
-          }
-          break;
-
-        case 'ping':
-          session.socket.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-          break;
-      }
-    } catch {
-      session.socket.send(JSON.stringify({ type: 'error', message: 'Malformed JSON' }));
-    }
+    socket.on('message', (data: WebSocket.RawData) => {
+      handleClientMessage(session, data);
+    });
   }
 
   /**
@@ -143,16 +115,25 @@ export class ConflationEngine {
 
     const symbols = Object.keys(SUPPORTED_PAIRS) as SupportedPairSymbol[];
     for (const symbol of symbols) {
-      const snapshot = this.orderBookManager.getSnapshot(symbol);
-      fullPayloads.set(symbol, JSON.stringify(snapshot));
+      try {
+        const snapshot = this.orderBookManager.getSnapshot(symbol);
+        fullPayloads.set(symbol, JSON.stringify(snapshot));
 
-      // Tier 2: Degraded/Shedding payload (empty bids/asks to conserve 90% bandwidth)
-      const shedSnapshot: MarketUpdatePayload = {
-        ...snapshot,
-        bids: [],
-        asks: [],
-      };
-      shedPayloads.set(symbol, JSON.stringify(shedSnapshot));
+        // Tier 2: Degraded/Shedding payload.
+        // DESIGN NOTE: We deliberately emit empty bids/asks ([] / []) instead of top-5 during Tier 2 backpressure.
+        // Rationale: Emitting top-5 still incurs substantial JSON serialization and network payload overhead (~30-40% of depth20).
+        // Emitting [] eliminates >90% of payload size while preserving real-time price, 24h stats, and buy/sell pressure metrics,
+        // allowing the client socket buffer to rapidly drain without losing top-line market telemetry.
+        const shedSnapshot: MarketUpdatePayload = {
+          ...snapshot,
+          bids: [],
+          asks: [],
+        };
+        shedPayloads.set(symbol, JSON.stringify(shedSnapshot));
+      } catch (err) {
+        // Robustness: Never allow one pair's error to kill the entire conflation interval
+        console.error(`[ConflationEngine] Error snapshotting pair ${symbol}:`, err);
+      }
     }
 
     // Broadcast to connected clients respecting individual throttle and 3-tier backpressure
@@ -164,9 +145,25 @@ export class ConflationEngine {
 
       const buffered = session.socket.bufferedAmount;
 
-      // Tier 3: Critical backpressure (>= 2 MB) -> Terminate lagging socket
+      // Tier 3: Critical backpressure (>= 2 MB) -> Graceful close (1008: Slow Consumer), fallback to terminate
       if (buffered >= BACKPRESSURE_THRESHOLDS.TERMINATE_BYTES) {
-        session.socket.terminate();
+        try {
+          session.socket.close(1008, 'Slow consumer');
+        } catch {
+          session.socket.terminate();
+        }
+
+        // Fallback safety: ensure socket is terminated if not closed within grace timeout
+        setTimeout(() => {
+          if (session.socket.readyState !== WebSocket.CLOSED) {
+            try {
+              session.socket.terminate();
+            } catch {
+              // noop
+            }
+          }
+        }, 1000).unref?.();
+
         this.clients.delete(session);
         continue;
       }
@@ -177,8 +174,10 @@ export class ConflationEngine {
         for (const pair of session.subscribedPairs) {
           const payload = shedPayloads.get(pair);
           if (payload) {
-            session.socket.send(payload);
-            this.metrics.wsBroadcastsSent.inc({ symbol: pair });
+            const sent = sendSafe(session.socket, payload);
+            if (sent) {
+              this.metrics.wsBroadcastsSent.inc({ symbol: pair });
+            }
           }
         }
       } else {
@@ -187,8 +186,10 @@ export class ConflationEngine {
         for (const pair of session.subscribedPairs) {
           const payload = fullPayloads.get(pair);
           if (payload) {
-            session.socket.send(payload);
-            this.metrics.wsBroadcastsSent.inc({ symbol: pair });
+            const sent = sendSafe(session.socket, payload);
+            if (sent) {
+              this.metrics.wsBroadcastsSent.inc({ symbol: pair });
+            }
           }
         }
       }

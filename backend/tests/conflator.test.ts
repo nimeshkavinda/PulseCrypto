@@ -34,6 +34,10 @@ describe('Conflation Engine & 3-Tier Backpressure Guard (Tasks T2.4 & T2.5)', ()
       send: vi.fn((data: string) => {
         sentMessages.push(data);
       }),
+      close: vi.fn((_code?: number, _reason?: string) => {
+        socket.readyState = WebSocket.CLOSED;
+        eventHandlers['close']?.forEach((fn) => fn());
+      }),
       terminate: vi.fn(() => {
         socket.readyState = WebSocket.CLOSED;
         eventHandlers['close']?.forEach((fn) => fn());
@@ -92,7 +96,7 @@ describe('Conflation Engine & 3-Tier Backpressure Guard (Tasks T2.4 & T2.5)', ()
     expect(sheddingCount).toBeDefined();
   });
 
-  it('should forcefully terminate connection in Tier 3 (Critical: >= 2MB buffer)', () => {
+  it('should close connection with 1008 in Tier 3 (Critical: >= 2MB buffer)', () => {
     const overloadedSocket = createMockSocket(BACKPRESSURE_THRESHOLDS.TERMINATE_BYTES + 1024); // > 2MB
     conflator.handleConnection(overloadedSocket);
 
@@ -100,7 +104,7 @@ describe('Conflation Engine & 3-Tier Backpressure Guard (Tasks T2.4 & T2.5)', ()
 
     conflator.tick();
 
-    expect(overloadedSocket.terminate).toHaveBeenCalled();
+    expect(overloadedSocket.close).toHaveBeenCalledWith(1008, 'Slow consumer');
     expect(conflator.getConnectedClientCount()).toBe(0);
   });
 
@@ -140,5 +144,45 @@ describe('Conflation Engine & 3-Tier Backpressure Guard (Tasks T2.4 & T2.5)', ()
     } else {
       delete process.env.FLUSH_INTERVAL_MS;
     }
+  });
+
+  it('should rate-limit error replies to at most 1 per second per session', () => {
+    const socket = createMockSocket(0);
+    conflator.handleConnection(socket);
+
+    // Send 3 consecutive malformed commands in quick succession (<1s)
+    socket.emitMessage('malformed 1');
+    socket.emitMessage('malformed 2');
+    socket.emitMessage('malformed 3');
+
+    // Only the first error should be sent due to 1/sec rate limiting
+    expect(socket.sentMessages).toHaveLength(1);
+    const parsed = JSON.parse(socket.sentMessages[0]);
+    expect(parsed.type).toBe('error');
+    expect(parsed.message).toBe('Malformed JSON');
+  });
+
+  it('should continue conflation cycle if getSnapshot throws for one pair', () => {
+    const socket = createMockSocket(0);
+    conflator.handleConnection(socket);
+
+    // Mock getSnapshot to throw for BTCUSDT but return normally for others
+    const origGetSnapshot = orderBookManager.getSnapshot.bind(orderBookManager);
+    vi.spyOn(orderBookManager, 'getSnapshot').mockImplementation((symbol) => {
+      if (symbol === 'BTCUSDT') {
+        throw new Error('Simulated order book corruption');
+      }
+      return origGetSnapshot(symbol);
+    });
+
+    // Should not throw
+    expect(() => conflator.tick()).not.toThrow();
+
+    // Remaining 4 supported pairs should still broadcast
+    expect(socket.sentMessages).toHaveLength(4);
+    const symbolsSent = socket.sentMessages.map((m) => JSON.parse(m).pair);
+    expect(symbolsSent).not.toContain('BTCUSDT');
+    expect(symbolsSent).toContain('ETHUSDT');
+    expect(symbolsSent).toContain('SOLUSDT');
   });
 });
