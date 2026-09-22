@@ -223,6 +223,9 @@ export class StorageRepository {
 
   public setClientThrottle(intervalMs: number): void {
     const clamped = Math.max(10, Math.min(1000, intervalMs));
+    if (this.getClientThrottle() === clamped) {
+      return;
+    }
     this.set(STORAGE_KEYS.THROTTLE_INTERVAL, clamped);
     this.notifyClientThrottle(clamped);
   }
@@ -233,6 +236,9 @@ export class StorageRepository {
   }
 
   public setGatewayUrl(url: string): void {
+    if (this.getGatewayUrl() === url) {
+      return;
+    }
     this.set(STORAGE_KEYS.GATEWAY_URL, url);
     this.notifyGatewayUrl(url);
   }
@@ -247,6 +253,9 @@ export class StorageRepository {
   }
 
   public setActivePair(symbol: string): void {
+    if (this.getActivePair() === symbol) {
+      return;
+    }
     this.set(STORAGE_KEYS.ACTIVE_PAIR, symbol);
     this.notifyActivePair(symbol);
   }

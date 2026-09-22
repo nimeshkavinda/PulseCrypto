@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { colors, spacing } from '../../theme/tokens';
+import { colors } from '../../theme/tokens';
 
 export const styles = StyleSheet.create({
   container: {
@@ -7,7 +7,7 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   scrollContent: {
-    paddingBottom: spacing.xxl,
+    paddingBottom: 0,
   },
   divider: {
     height: 1,

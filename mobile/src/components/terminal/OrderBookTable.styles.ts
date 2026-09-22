@@ -85,28 +85,4 @@ export const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.mono,
     color: colors.textSecondary,
   },
-  spreadDivider: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: 'rgba(11, 14, 20, 0.4)',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(42, 54, 73, 0.4)',
-    marginVertical: 2,
-  },
-  spreadLabel: {
-    fontSize: typography.fontSize.caption - 1,
-    fontFamily: typography.fontFamily.mono,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-  },
-  spreadValue: {
-    fontSize: typography.fontSize.caption - 1,
-    fontFamily: typography.fontFamily.monoBold,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.textSecondary,
-  },
 });

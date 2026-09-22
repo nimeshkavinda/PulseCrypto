@@ -141,14 +141,14 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
       ? colors.textSecondary
       : colors.askRed;
 
-  // Pressure label
+  // Pressure label (Mockup 3 matches discrete qualitative states without jumping text lengths)
   let pressureLabel = 'Balanced';
   let pressureColor: string = colors.textSecondary;
   if (buyPressure > 55) {
-    pressureLabel = `Buy Heavy (${buyPressure.toFixed(0)}%)`;
+    pressureLabel = 'Buy Heavy';
     pressureColor = colors.bidGreen;
   } else if (sellPressure > 55) {
-    pressureLabel = `Sell Heavy (${sellPressure.toFixed(0)}%)`;
+    pressureLabel = 'Sell Heavy';
     pressureColor = colors.askRed;
   }
 
@@ -220,7 +220,7 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
         <View style={styles.floatingBadgeCard}>
           <View style={styles.badgeColumn}>
             <Text style={styles.badgeTitle}>LIQUIDITY GAP</Text>
-            <Text style={[styles.badgeValue, { color: gapColor }]}>
+            <Text style={[styles.badgeValue, { color: gapColor }]} numberOfLines={1}>
               {gapLabel} ({spreadPct.toFixed(2)}%)
             </Text>
           </View>
@@ -229,7 +229,7 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
 
           <View style={styles.badgeColumn}>
             <Text style={styles.badgeTitle}>PRESSURE</Text>
-            <Text style={[styles.badgeValue, { color: pressureColor }]}>
+            <Text style={[styles.badgeValue, { color: pressureColor }]} numberOfLines={1}>
               {pressureLabel}
             </Text>
           </View>

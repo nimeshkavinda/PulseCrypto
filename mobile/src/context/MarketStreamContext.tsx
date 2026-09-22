@@ -143,6 +143,8 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   activePairRef.current = activePair;
 
   const setActivePair = useCallback((pair: SupportedPairSymbol) => {
+    if (activePairRef.current === pair) return;
+    activePairRef.current = pair;
     setActivePairState(pair);
     defaultStorage.setActivePair(pair);
     // Reset price tracking on pair switch
@@ -236,7 +238,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      ws.onmessage = (event: WebSocketMessageEvent) => {
+      ws.onmessage = (event: { data: unknown }) => {
         try {
           const raw = typeof event.data === 'string' ? JSON.parse(event.data) : null;
           if (!isValidMarketPayload(raw)) {
@@ -320,7 +322,9 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
 
     // Listen for active pair changes from storage
     const unsubPair = defaultStorage.subscribeActivePair((pair) => {
-      setActivePair(pair as SupportedPairSymbol);
+      if (activePairRef.current !== pair) {
+        setActivePair(pair as SupportedPairSymbol);
+      }
     });
 
     return () => {

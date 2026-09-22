@@ -129,7 +129,7 @@ export const LastPriceHero = React.memo(function LastPriceHero({
         </View>
 
         <View style={[styles.statColumn, styles.statColumnRight]}>
-          <Text style={styles.statLabel}>24H VOLUME</Text>
+          <Text style={styles.statLabel}>MARKET CAP</Text>
           <Text style={styles.statValue}>
             ${formatVolume(payload.volume24h)}
           </Text>

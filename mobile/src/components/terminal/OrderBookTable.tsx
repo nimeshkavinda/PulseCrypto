@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import { DepthTuple } from '@pulsecrypto/shared';
 import { OrderBookRow } from './OrderBookRow';
-import { formatPrice } from '../../utils/formatters';
 import { styles } from './OrderBookTable.styles';
 
 interface OrderBookTableProps {
@@ -23,8 +22,8 @@ export const OrderBookTable = React.memo(function OrderBookTable({
   quoteAsset,
   priceDecimals,
   qtyDecimals,
-  spread = 0,
-  spreadPct = 0,
+  spread: _spread = 0,
+  spreadPct: _spreadPct = 0,
 }: OrderBookTableProps) {
   const top10Bids = useMemo(() => bids.slice(0, 10), [bids]);
   const top10Asks = useMemo(() => asks.slice(0, 10), [asks]);
@@ -61,15 +60,6 @@ export const OrderBookTable = React.memo(function OrderBookTable({
           />
         );
       })}
-
-      {/* Spread Divider */}
-      <View style={styles.spreadDivider}>
-        <Text style={styles.spreadLabel}>SPREAD</Text>
-        <Text style={styles.spreadValue}>
-          {formatPrice(spread, priceDecimals)} ({spreadPct.toFixed(3)}%)
-        </Text>
-      </View>
-
       {/* Asks Header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.headerColPrice}>PRICE ({quoteAsset})</Text>
