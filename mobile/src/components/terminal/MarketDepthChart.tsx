@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, LayoutChangeEvent } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Line } from 'react-native-svg';
 import { DepthTuple } from '@pulsecrypto/shared';
 import { colors } from '../../theme/tokens';
 import { formatVolume } from '../../utils/formatters';
-import { defaultStorage } from '../../storage/storageRepository';
 import { styles } from './MarketDepthChart.styles';
+import { buildSplineSegments } from '../../utils/chartUtils';
 
 interface MarketDepthChartProps {
   bids: DepthTuple[];
@@ -16,8 +16,6 @@ interface MarketDepthChartProps {
   sellPressure?: number;
 }
 
-import { buildSplineSegments } from '../../utils/chartUtils';
-
 export const MarketDepthChart = React.memo(function MarketDepthChart({
   bids,
   asks,
@@ -27,46 +25,6 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
   sellPressure = 50,
 }: MarketDepthChartProps) {
   const [dimensions, setDimensions] = useState({ width: 360, height: 190 });
-  const [chartData, setChartData] = useState<{
-    bids: DepthTuple[];
-    asks: DepthTuple[];
-  }>({ bids, asks });
-
-  const lastRedrawTimeRef = useRef<number>(0);
-  const pendingDataRef = useRef<{ bids: DepthTuple[]; asks: DepthTuple[] }>({ bids, asks });
-  pendingDataRef.current = { bids, asks };
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Safety-floored redraw cadence per ADR 5: Math.max(sliderValue, 250)
-  useEffect(() => {
-    const throttleMs = defaultStorage.getClientThrottle();
-    const minRedrawInterval = Math.max(throttleMs, 250);
-    const now = Date.now();
-    const elapsed = now - lastRedrawTimeRef.current;
-
-    if (elapsed >= minRedrawInterval) {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      lastRedrawTimeRef.current = now;
-      setChartData({ bids, asks });
-    } else if (!timerRef.current) {
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        lastRedrawTimeRef.current = Date.now();
-        setChartData(pendingDataRef.current);
-      }, minRedrawInterval - elapsed);
-    }
-  }, [bids, asks]);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, []);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -83,53 +41,101 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
   const availableHeight = maxHeight - minHeight;
 
   // Use top 15 depth levels for smooth chart curvature
-  const activeBids = chartData.bids.slice(0, 15);
-  const activeAsks = chartData.asks.slice(0, 15);
+  const activeBids = useMemo(() => bids.slice(0, 15), [bids]);
+  const activeAsks = useMemo(() => asks.slice(0, 15), [asks]);
 
-  const totalBidQty = activeBids.reduce((sum, b) => sum + b[1], 0);
-  const totalAskQty = activeAsks.reduce((sum, a) => sum + a[1], 0);
+  const {
+    totalBidQty,
+    totalAskQty,
+    bidFillPath,
+    bidStrokePath,
+    askFillPath,
+    askStrokePath,
+  } = useMemo(() => {
+    const bQty = activeBids.reduce((sum, b) => sum + b[1], 0);
+    const aQty = activeAsks.reduce((sum, a) => sum + a[1], 0);
 
-  const maxBidCumulative = activeBids[activeBids.length - 1]?.[2] ?? 1;
-  const maxAskCumulative = activeAsks[activeAsks.length - 1]?.[2] ?? 1;
-  const maxCumulative = Math.max(maxBidCumulative, maxAskCumulative, 0.001);
+    // Build points for Bids (Left Mountain: x = 0 -> midX)
+    let bFill = `M 0 ${baselineY} L ${midX} ${baselineY} Z`;
+    let bStroke = '';
+    if (activeBids.length > 0) {
+      const n = activeBids.length;
+      let runningQty = 0;
+      const cumQtys: number[] = [];
+      for (let i = 0; i < n; i++) {
+        runningQty += activeBids[i][1];
+        cumQtys.push(runningQty);
+      }
+      const maxBidQty = Math.max(runningQty, 0.0001);
+      const bidHeightFactor = Math.max(0.45, Math.min(1.0, buyPressure / 50));
 
-  // Build points for Bids (Left Mountain: x = 0 -> midX)
-  let bidFillPath = `M 0 ${baselineY} L ${midX} ${baselineY} Z`;
-  let bidStrokePath = '';
-  if (activeBids.length > 0) {
-    const bidPoints: [number, number][] = [];
-    const n = activeBids.length;
-    // Walk from lowest price (far left, index n - 1) to best bid (midX, index 0)
-    for (let i = n - 1; i >= 0; i--) {
-      const ratio = (n - 1 - i) / Math.max(n - 1, 1);
-      const x = Number((midX * ratio).toFixed(1));
-      const cumTotal = activeBids[i][2];
-      const y = Number((baselineY - (minHeight + (cumTotal / maxCumulative) * availableHeight)).toFixed(1));
-      bidPoints.push([x, y]);
+      // Build points from deepest bid (x = 0) to best bid (near midX)
+      const bidPoints: [number, number][] = [];
+      for (let i = n - 1; i >= 0; i--) {
+        const ratioX = (n - 1 - i) / Math.max(n - 1, 1);
+        const x = Number((midX * ratioX).toFixed(1));
+        const rankRatio = (i + 1) / n;
+        const volRatio = cumQtys[i] / maxBidQty;
+        const blended = 0.45 * rankRatio + 0.55 * volRatio;
+        const curveH = Math.pow(blended, 0.7);
+        const y = Number(
+          (baselineY - (minHeight + curveH * availableHeight * bidHeightFactor)).toFixed(1)
+        );
+        bidPoints.push([x, y]);
+      }
+      // Meet center at baseline
+      bidPoints.push([midX, baselineY - minHeight]);
+
+      const { fill, stroke } = buildSplineSegments(bidPoints);
+      bFill = `M 0 ${baselineY} ${fill} L ${midX} ${baselineY} Z`;
+      bStroke = stroke;
     }
-    const { fill, stroke } = buildSplineSegments(bidPoints);
-    bidFillPath = `M 0 ${baselineY} ${fill} L ${midX} ${baselineY} Z`;
-    bidStrokePath = stroke;
-  }
 
-  // Build points for Asks (Right Mountain: x = midX -> W)
-  let askFillPath = `M ${midX} ${baselineY} L ${W} ${baselineY} Z`;
-  let askStrokePath = '';
-  if (activeAsks.length > 0) {
-    const askPoints: [number, number][] = [];
-    const m = activeAsks.length;
-    // Walk from best ask (midX, index 0) to highest ask (far right, index m - 1)
-    for (let j = 0; j < m; j++) {
-      const ratio = j / Math.max(m - 1, 1);
-      const x = Number((midX + (W - midX) * ratio).toFixed(1));
-      const cumTotal = activeAsks[j][2];
-      const y = Number((baselineY - (minHeight + (cumTotal / maxCumulative) * availableHeight)).toFixed(1));
-      askPoints.push([x, y]);
+    // Build points for Asks (Right Mountain: x = midX -> W)
+    let aFill = `M ${midX} ${baselineY} L ${W} ${baselineY} Z`;
+    let aStroke = '';
+    if (activeAsks.length > 0) {
+      const m = activeAsks.length;
+      let runningQty = 0;
+      const cumQtys: number[] = [];
+      for (let j = 0; j < m; j++) {
+        runningQty += activeAsks[j][1];
+        cumQtys.push(runningQty);
+      }
+      const maxAskQty = Math.max(runningQty, 0.0001);
+      const askHeightFactor = Math.max(0.45, Math.min(1.0, sellPressure / 50));
+
+      // Start at center at baseline
+      const askPoints: [number, number][] = [[midX, baselineY - minHeight]];
+
+      // Walk from best ask (j = 0) to deepest ask (j = m - 1, x = W)
+      for (let j = 0; j < m; j++) {
+        const ratioX = (j + 1) / m;
+        const x = Number((midX + (W - midX) * ratioX).toFixed(1));
+        const rankRatio = (j + 1) / m;
+        const volRatio = cumQtys[j] / maxAskQty;
+        const blended = 0.45 * rankRatio + 0.55 * volRatio;
+        const curveH = Math.pow(blended, 0.7);
+        const y = Number(
+          (baselineY - (minHeight + curveH * availableHeight * askHeightFactor)).toFixed(1)
+        );
+        askPoints.push([x, y]);
+      }
+
+      const { fill, stroke } = buildSplineSegments(askPoints);
+      aFill = `M ${midX} ${baselineY} ${fill} L ${W} ${baselineY} Z`;
+      aStroke = stroke;
     }
-    const { fill, stroke } = buildSplineSegments(askPoints);
-    askFillPath = `M ${midX} ${baselineY} ${fill} L ${W} ${baselineY} Z`;
-    askStrokePath = stroke;
-  }
+
+    return {
+      totalBidQty: bQty,
+      totalAskQty: aQty,
+      bidFillPath: bFill,
+      bidStrokePath: bStroke,
+      askFillPath: aFill,
+      askStrokePath: aStroke,
+    };
+  }, [activeBids, activeAsks, W, availableHeight, baselineY, midX, minHeight, buyPressure, sellPressure]);
 
   // Liquidity Gap label
   const gapLabel =

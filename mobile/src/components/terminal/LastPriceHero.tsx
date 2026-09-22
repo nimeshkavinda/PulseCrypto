@@ -29,6 +29,14 @@ export const LastPriceHero = React.memo(function LastPriceHero({
   const isPositive = payload.change24h >= 0;
   const changeColor = isPositive ? colors.bidGreen : colors.askRed;
 
+  // Last trade price color matches tick direction (green on tick up, red on tick down, baseline changeColor on neutral)
+  const heroPriceColor =
+    priceDirection === 'up'
+      ? colors.bidGreen
+      : priceDirection === 'down'
+      ? colors.askRed
+      : changeColor;
+
   // Flash animation shared value: 0 = transparent, 1 = flash green, 2 = flash red
   const flashAnim = useSharedValue(0);
   const prevPriceRef = useRef<number>(payload.price);
@@ -90,7 +98,7 @@ export const LastPriceHero = React.memo(function LastPriceHero({
       {/* Hero Price & 24h Change Pill */}
       <View style={styles.priceRow}>
         <Animated.View style={[styles.flashContainer, animatedStyle]}>
-          <Text style={[styles.heroPrice, { color: changeColor }]}>
+          <Text style={[styles.heroPrice, { color: heroPriceColor }]}>
             ${formatPrice(payload.price, priceDecimals)}
           </Text>
         </Animated.View>

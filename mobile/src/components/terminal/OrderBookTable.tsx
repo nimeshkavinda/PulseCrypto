@@ -28,11 +28,18 @@ export const OrderBookTable = React.memo(function OrderBookTable({
   const top10Bids = useMemo(() => bids.slice(0, 10), [bids]);
   const top10Asks = useMemo(() => asks.slice(0, 10), [asks]);
 
-  // Compute max cumulative volume across top 10 for percentage bar scaling
-  const maxCumulative = useMemo(() => {
-    const maxBidTotal = top10Bids[top10Bids.length - 1]?.[2] ?? 1;
-    const maxAskTotal = top10Asks[top10Asks.length - 1]?.[2] ?? 1;
-    return Math.max(maxBidTotal, maxAskTotal, 1);
+  // Compute max single level order volume across visible book for percentage bar scaling.
+  // Directly aligns with Binance dashboard and Mockup 3: major volume walls produce long bars,
+  // while small orders render subtle minimal indicators instead of solid full-width cumulative blocks.
+  const maxVolume = useMemo(() => {
+    let max = 0.001;
+    for (const b of top10Bids) {
+      if (b[1] > max) max = b[1];
+    }
+    for (const a of top10Asks) {
+      if (a[1] > max) max = a[1];
+    }
+    return max;
   }, [top10Bids, top10Asks]);
 
   return (
@@ -46,7 +53,7 @@ export const OrderBookTable = React.memo(function OrderBookTable({
 
       {/* Top 10 Bids */}
       {top10Bids.map(([price, amount, total], index) => {
-        const depthRatio = total / maxCumulative;
+        const depthRatio = Math.min(1, Math.max(0.04, amount / maxVolume));
         return (
           <OrderBookRow
             key={`bid-${index}`}
@@ -69,7 +76,7 @@ export const OrderBookTable = React.memo(function OrderBookTable({
 
       {/* Top 10 Asks */}
       {top10Asks.map(([price, amount, total], index) => {
-        const depthRatio = total / maxCumulative;
+        const depthRatio = Math.min(1, Math.max(0.04, amount / maxVolume));
         return (
           <OrderBookRow
             key={`ask-${index}`}

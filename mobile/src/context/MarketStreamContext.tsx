@@ -191,6 +191,19 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
         const dir = computePriceDirection(oldPrice, currentPrice);
         setPrevPrice(oldPrice);
         setPriceDirection(dir);
+      } else if (oldPrice === null) {
+        // Initialize direction on first payload received for the active pair
+        const bestBid = activeItem.bids[0]?.[0];
+        const bestAsk = activeItem.asks[0]?.[0];
+        let initialDir: PriceDirection;
+        if (bestBid && currentPrice <= bestBid) {
+          initialDir = 'down';
+        } else if (bestAsk && currentPrice >= bestAsk) {
+          initialDir = 'up';
+        } else {
+          initialDir = activeItem.change24h >= 0 ? 'up' : 'down';
+        }
+        setPriceDirection(initialDir);
       }
       prevPriceRef.current = currentPrice;
     }
@@ -253,18 +266,13 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
           lvcRef.current[raw.pair] = raw;
           pendingFlushRef.current = true;
 
-          // Throttled display-side conflation (target: ~3-4 renders/sec, well under 10/sec ceiling)
-          const now = Date.now();
+          // Throttled display-side conflation (target: ~4 renders/sec, decoupled from ws.onmessage)
           const FLUSH_INTERVAL_MS = 250;
-          const elapsed = now - lastFlushTimeRef.current;
-
-          if (elapsed >= FLUSH_INTERVAL_MS) {
-            flushPendingUpdates();
-          } else if (!flushTimerRef.current) {
+          if (!flushTimerRef.current) {
             flushTimerRef.current = setTimeout(() => {
               flushTimerRef.current = null;
               flushPendingUpdates();
-            }, FLUSH_INTERVAL_MS - elapsed);
+            }, FLUSH_INTERVAL_MS);
           }
         } catch {
           // invalid JSON or binary frame — ignore gracefully
