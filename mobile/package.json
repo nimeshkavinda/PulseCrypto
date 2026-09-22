@@ -1,0 +1,9 @@
+{
+  "name": "@pulsecrypto/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PulseCrypto React Native Mobile Application",
+  "scripts": {
+    "test": "echo \"Mobile tests will be configured in Phase 3 (T3.1)\" && exit 0"
+  }
+}

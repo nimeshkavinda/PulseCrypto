@@ -1,0 +1,14 @@
+.git
+.agents
+.agent
+.claude
+_bmad
+_bmad-output
+node_modules
+**/node_modules
+dist
+**/dist
+build
+.expo
+scratch
+tmp

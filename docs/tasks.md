@@ -5,11 +5,11 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ---
 
 ## Phase 1: Foundation, Spec Documents & Shared Contracts
-- [ ] **T1.1**: Initialize monorepo directory layout (`/backend`, `/shared`, `/mobile`), root `.gitignore`, root `package.json`, and Git remote configuration.
-- [ ] **T1.2**: Author spec-driven documentation (`docs/requirements.md`, `docs/design.md`, `docs/tasks.md`, `GIT_WORKFLOW.md`) as the initial baseline commit on `main`.
-- [ ] **T1.3**: Build `/shared` workspace with strict Zod schemas and TypeScript types for `MarketUpdatePayload`, `PairMetadata`, and `ClientCommand`, including round-trip parse unit tests.
-- [ ] **T1.4**: Configure backend TypeScript, ESLint, and Vitest test runner.
-- [ ] **T1.5**: Author multi-stage `Dockerfile` and minimal `docker-compose.yml` for one-command reviewer execution (`docker compose up`).
+- [x] **T1.1**: Initialize monorepo directory layout (`/backend`, `/shared`, `/mobile`), root `.gitignore`, root `package.json`, and Git remote configuration.
+- [x] **T1.2**: Author spec-driven documentation (`docs/requirements.md`, `docs/design.md`, `docs/tasks.md`, `GIT_WORKFLOW.md`) as the initial baseline commit on `main`.
+- [x] **T1.3**: Build `/shared` workspace with strict Zod schemas and TypeScript types for `MarketUpdatePayload`, `PairMetadata`, and `ClientCommand`, including round-trip parse unit tests.
+- [x] **T1.4**: Configure backend TypeScript, ESLint, and Vitest test runner.
+- [x] **T1.5**: Author multi-stage `Dockerfile` and minimal `docker-compose.yml` for one-command reviewer execution (`docker compose up`).
 
 ---
 
