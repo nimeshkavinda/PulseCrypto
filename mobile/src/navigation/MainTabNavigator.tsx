@@ -1,20 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabParamList, RootDrawerParamList } from './types';
 import { TerminalScreen } from '../screens/TerminalScreen';
 import { MarketsScreen } from '../screens/MarketsScreen';
 import { TelemetryScreen } from '../screens/TelemetryScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens';
+import { colors, typography, spacing } from '../theme/tokens';
+import { styles } from './MainTabNavigator.styles';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
 export function MainTabNavigator() {
   const drawerNavigation = useNavigation<DrawerNavigationProp<RootDrawerParamList>>();
+  const insets = useSafeAreaInsets();
 
   const renderHeaderLeft = () => (
     <TouchableOpacity
@@ -22,6 +25,8 @@ export function MainTabNavigator() {
       onPress={() => drawerNavigation.openDrawer()}
       activeOpacity={0.7}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      accessibilityRole="button"
+      accessibilityLabel="Open navigation menu"
     >
       <Ionicons name="menu-outline" size={24} color={colors.textPrimary} />
     </TouchableOpacity>
@@ -30,7 +35,7 @@ export function MainTabNavigator() {
   const renderHeaderRight = () => (
     <View style={styles.statusPill}>
       <View style={styles.liveDot} />
-      <Text style={styles.statusPillText}>Live 100ms</Text>
+      <Text style={styles.statusPillText}>LIVE</Text>
     </View>
   );
 
@@ -57,8 +62,8 @@ export function MainTabNavigator() {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: spacing.sm,
+          height: 54 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, spacing.xs),
           paddingTop: spacing.xs,
         },
         tabBarActiveTintColor: colors.bidGreen,
@@ -112,33 +117,3 @@ export function MainTabNavigator() {
     </Tab.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  headerButton: {
-    marginLeft: spacing.lg,
-    padding: spacing.xs,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.lg,
-    backgroundColor: colors.bidGreenSubtle,
-    borderColor: colors.bidGreen,
-    borderWidth: 1,
-    borderRadius: borderRadius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.bidGreen,
-    marginRight: spacing.xs,
-  },
-  statusPillText: {
-    color: colors.bidGreen,
-    fontSize: typography.fontSize.caption,
-    fontWeight: typography.fontWeight.bold,
-  },
-});

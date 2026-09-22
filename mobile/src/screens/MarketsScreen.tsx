@@ -2,17 +2,16 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  FlatList,
   RefreshControl,
-  SafeAreaView,
   ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { PairMetadata } from '@pulsecrypto/shared';
-import { colors, typography, spacing, borderRadius } from '../theme/tokens';
+import { colors } from '../theme/tokens';
 import { usePairsMetadata } from '../hooks/usePairsMetadata';
 import { useFavorites } from '../hooks/useFavorites';
 import { MarketPairCard } from './watchlist/MarketPairCard';
@@ -20,6 +19,7 @@ import { MarketFilterBar } from './watchlist/MarketFilterBar';
 import { filterAndSortPairs, MarketFilterTab } from './watchlist/filterUtils';
 import { defaultStorage } from '../storage/storageRepository';
 import type { BottomTabParamList } from '../navigation/types';
+import { styles } from './MarketsScreen.styles';
 
 export function MarketsScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<BottomTabParamList, 'Markets'>>();
@@ -107,7 +107,7 @@ export function MarketsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       {/* Header Bar */}
       <View style={styles.header}>
         <View>
@@ -134,8 +134,8 @@ export function MarketsScreen() {
         favoritesCount={favorites.length}
       />
 
-      {/* Main Pair List */}
-      <FlatList
+      {/* High-Performance Recycling FlashList */}
+      <FlashList
         data={displayedPairs}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
@@ -155,81 +155,3 @@ export function MarketsScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.primary,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-  },
-  headerTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.title,
-    fontWeight: typography.fontWeight.bold,
-  },
-  headerSubtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.caption,
-    marginTop: 2,
-  },
-  syncBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bidGreenSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.pill,
-    gap: 6,
-  },
-  syncText: {
-    color: colors.bidGreen,
-    fontSize: 10,
-    fontWeight: typography.fontWeight.bold,
-    letterSpacing: 0.5,
-  },
-  listContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxxl,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.subtitle,
-    fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.xs,
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.body,
-    textAlign: 'center',
-    lineHeight: typography.lineHeight.body,
-  },
-  emptyButton: {
-    marginTop: spacing.md,
-    backgroundColor: colors.surfaceElevated,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  emptyButtonText: {
-    color: colors.bidGreen,
-    fontSize: typography.fontSize.caption,
-    fontWeight: typography.fontWeight.semiBold,
-  },
-});

@@ -16,4 +16,27 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ];
 
+// Handle TypeScript ESM .js extension imports in monorepo packages
+const defaultResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  try {
+    return (defaultResolveRequest || context.resolveRequest)(context, moduleName, platform);
+  } catch (error) {
+    if (moduleName.endsWith('.js')) {
+      const tsModuleName = moduleName.slice(0, -3) + '.ts';
+      try {
+        return (defaultResolveRequest || context.resolveRequest)(context, tsModuleName, platform);
+      } catch {
+        const tsxModuleName = moduleName.slice(0, -3) + '.tsx';
+        try {
+          return (defaultResolveRequest || context.resolveRequest)(context, tsxModuleName, platform);
+        } catch {
+          // Fall through
+        }
+      }
+    }
+    throw error;
+  }
+};
+
 module.exports = config;
