@@ -29,10 +29,13 @@ export interface MarketStreamContextValue {
   connectionStatus: ConnectionStatus;
   prevPrice: number | null;
   priceDirection: PriceDirection;
+  throttleMs: number;
   setThrottle: (intervalMs: number) => void;
   reconnect: () => void;
   latencyMs: number;
   messagesReceivedTotal: number;
+  ingestionRate: number;
+  resetMetrics: () => void;
 }
 
 const MarketStreamContext = createContext<MarketStreamContextValue | null>(null);
@@ -126,6 +129,8 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const [priceDirection, setPriceDirection] = useState<PriceDirection>('neutral');
   const [latencyMs, setLatencyMs] = useState<number>(0);
   const [messagesReceivedTotal, setMessagesReceivedTotal] = useState<number>(0);
+  const [throttleMs, setThrottleMsState] = useState<number>(() => defaultStorage.getClientThrottle());
+  const [ingestionRate, setIngestionRate] = useState<number>(0);
 
   // In-memory Last-Value-Cache (LVC) & Conflation refs
   const lvcRef = useRef<Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>>({});
@@ -134,7 +139,9 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPriceRef = useRef<number | null>(null);
   const messagesCountRef = useRef<number>(0);
+  const lastSecCountRef = useRef<number>(0);
   const latencyRef = useRef<number>(0);
+  const throttleIntervalRef = useRef<number>(defaultStorage.getClientThrottle());
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -154,11 +161,21 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
 
   const setThrottle = useCallback(
     (intervalMs: number) => {
-      defaultStorage.setClientThrottle(intervalMs);
-      sendCommand({ action: 'setThrottle', intervalMs });
+      const clamped = Math.max(10, Math.min(1000, intervalMs));
+      defaultStorage.setClientThrottle(clamped);
+      throttleIntervalRef.current = clamped;
+      setThrottleMsState(clamped);
+      sendCommand({ action: 'setThrottle', intervalMs: clamped });
     },
     [sendCommand]
   );
+
+  const resetMetrics = useCallback(() => {
+    messagesCountRef.current = 0;
+    lastSecCountRef.current = 0;
+    setMessagesReceivedTotal(0);
+    setIngestionRate(0);
+  }, []);
 
   /**
    * Flushes accumulated LVC buffer to React state in a single batch pass.
@@ -279,8 +296,8 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
           lvcRef.current[raw.pair] = raw;
           pendingFlushRef.current = true;
 
-          // Throttled display-side conflation (target: ~4 renders/sec, decoupled from ws.onmessage)
-          const FLUSH_INTERVAL_MS = 250;
+          // Throttled display-side conflation decoupled from ws.onmessage
+          const FLUSH_INTERVAL_MS = throttleIntervalRef.current;
           if (!flushTimerRef.current) {
             flushTimerRef.current = setTimeout(() => {
               try {
@@ -333,6 +350,14 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     connect();
 
+    // 1-second rolling calculation for WS message ingestion rate
+    const rateInterval = setInterval(() => {
+      const current = messagesCountRef.current;
+      const rate = Math.max(0, current - lastSecCountRef.current);
+      lastSecCountRef.current = current;
+      setIngestionRate(rate);
+    }, 1000);
+
     // Listen for gateway URL changes from Settings screen
     const unsubGateway = defaultStorage.subscribeGatewayUrl(() => {
       reconnectAttemptsRef.current = 0;
@@ -340,8 +365,10 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     });
 
     // Listen for throttle changes
-    const unsubThrottle = defaultStorage.subscribeClientThrottle((throttleMs) => {
-      sendCommand({ action: 'setThrottle', intervalMs: throttleMs });
+    const unsubThrottle = defaultStorage.subscribeClientThrottle((newThrottleMs) => {
+      throttleIntervalRef.current = newThrottleMs;
+      setThrottleMsState(newThrottleMs);
+      sendCommand({ action: 'setThrottle', intervalMs: newThrottleMs });
     });
 
     // Listen for active pair changes from storage
@@ -352,6 +379,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      clearInterval(rateInterval);
       unsubGateway();
       unsubThrottle();
       unsubPair();
@@ -380,10 +408,13 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     connectionStatus,
     prevPrice,
     priceDirection,
+    throttleMs,
     setThrottle,
     reconnect,
     latencyMs,
     messagesReceivedTotal,
+    ingestionRate,
+    resetMetrics,
   }), [
     activePair,
     setActivePair,
@@ -392,10 +423,13 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     connectionStatus,
     prevPrice,
     priceDirection,
+    throttleMs,
     setThrottle,
     reconnect,
     latencyMs,
     messagesReceivedTotal,
+    ingestionRate,
+    resetMetrics,
   ]);
 
   return <MarketStreamContext.Provider value={value}>{children}</MarketStreamContext.Provider>;

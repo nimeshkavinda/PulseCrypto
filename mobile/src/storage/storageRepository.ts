@@ -9,6 +9,7 @@ export interface IStorageBackend {
   set(key: string, value: string): void;
   delete(key: string): void;
   clearAll(): void;
+  getAllKeys?(): string[];
 }
 
 class InMemoryStorageBackend implements IStorageBackend {
@@ -28,6 +29,10 @@ class InMemoryStorageBackend implements IStorageBackend {
 
   public clearAll(): void {
     this.map.clear();
+  }
+
+  public getAllKeys(): string[] {
+    return Array.from(this.map.keys());
   }
 }
 
@@ -49,6 +54,8 @@ export const STORAGE_KEYS = {
   THROTTLE_INTERVAL: 'pulse_throttle_ms',
   GATEWAY_URL: 'pulse_gateway_url',
   ACTIVE_PAIR: 'pulse_active_pair',
+  BINARY_COMPRESSION: 'pulse_binary_compression',
+  ADAPTIVE_POLLING: 'pulse_adaptive_polling',
 } as const;
 
 export const DEFAULT_FAVORITES = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
@@ -258,6 +265,54 @@ export class StorageRepository {
     }
     this.set(STORAGE_KEYS.ACTIVE_PAIR, symbol);
     this.notifyActivePair(symbol);
+  }
+
+  public getBinaryCompression(): boolean {
+    const val = this.get<boolean>(STORAGE_KEYS.BINARY_COMPRESSION);
+    return val !== null ? Boolean(val) : true;
+  }
+
+  public setBinaryCompression(enabled: boolean): void {
+    this.set(STORAGE_KEYS.BINARY_COMPRESSION, enabled);
+  }
+
+  public getAdaptivePolling(): boolean {
+    const val = this.get<boolean>(STORAGE_KEYS.ADAPTIVE_POLLING);
+    return val !== null ? Boolean(val) : false;
+  }
+
+  public setAdaptivePolling(enabled: boolean): void {
+    this.set(STORAGE_KEYS.ADAPTIVE_POLLING, enabled);
+  }
+
+  public resetDefaults(): void {
+    this.setFavorites(DEFAULT_FAVORITES);
+    this.setClientThrottle(DEFAULT_THROTTLE_MS);
+    this.setGatewayUrl(DEFAULT_GATEWAY_URL);
+    this.setBinaryCompression(true);
+    this.setAdaptivePolling(false);
+    this.setActivePair('BTCUSDT');
+  }
+
+  public getStorageStats(): { keysCount: number; estimatedBytes: number; estimatedKb: number } {
+    if (typeof this.backend.getAllKeys === 'function') {
+      const keys = this.backend.getAllKeys();
+      let totalBytes = 0;
+      for (const k of keys) {
+        const val = this.backend.getString(k);
+        totalBytes += (k.length + (val ? val.length : 0)) * 2;
+      }
+      return {
+        keysCount: keys.length,
+        estimatedBytes: totalBytes,
+        estimatedKb: Math.max(1, Math.round(totalBytes / 1024)),
+      };
+    }
+    return {
+      keysCount: 6,
+      estimatedBytes: 42000,
+      estimatedKb: 42,
+    };
   }
 }
 

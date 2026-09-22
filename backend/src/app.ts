@@ -29,9 +29,21 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   const conflator = options.conflationEngine ?? defaultConflator;
 
   const app = Fastify({
+    genReqId: (req) => (req.headers['x-request-id'] as string) || `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     logger: shouldLog
       ? {
           level: isDev ? 'info' : 'warn',
+          redact: ['req.headers.authorization', 'req.headers.cookie'],
+          serializers: {
+            req(req) {
+              return {
+                method: req.method,
+                url: req.url,
+                id: req.id,
+                remoteAddress: req.ip,
+              };
+            },
+          },
         }
       : false,
   });
