@@ -16,6 +16,8 @@ interface MarketDepthChartProps {
   sellPressure?: number;
 }
 
+import { buildSplineSegments } from '../../utils/chartUtils';
+
 export const MarketDepthChart = React.memo(function MarketDepthChart({
   bids,
   asks,
@@ -24,7 +26,7 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
   buyPressure = 50,
   sellPressure = 50,
 }: MarketDepthChartProps) {
-  const [dimensions, setDimensions] = useState({ width: 340, height: 160 });
+  const [dimensions, setDimensions] = useState({ width: 360, height: 190 });
   const [chartData, setChartData] = useState<{
     bids: DepthTuple[];
     asks: DepthTuple[];
@@ -75,8 +77,10 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
 
   const { width: W, height: H } = dimensions;
   const midX = W / 2;
-  const baselineY = H - 8;
-  const maxHeight = H - 32;
+  const baselineY = H;
+  const minHeight = 28;
+  const maxHeight = H - 28;
+  const availableHeight = maxHeight - minHeight;
 
   // Use top 15 depth levels for smooth chart curvature
   const activeBids = chartData.bids.slice(0, 15);
@@ -89,38 +93,42 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
   const maxAskCumulative = activeAsks[activeAsks.length - 1]?.[2] ?? 1;
   const maxCumulative = Math.max(maxBidCumulative, maxAskCumulative, 0.001);
 
-  // Build SVG Path for Bids (Left Mountain: 0 -> midX)
-  let bidPath = `M 0 ${baselineY}`;
+  // Build points for Bids (Left Mountain: x = 0 -> midX)
+  let bidFillPath = `M 0 ${baselineY} L ${midX} ${baselineY} Z`;
+  let bidStrokePath = '';
   if (activeBids.length > 0) {
+    const bidPoints: [number, number][] = [];
     const n = activeBids.length;
     // Walk from lowest price (far left, index n - 1) to best bid (midX, index 0)
     for (let i = n - 1; i >= 0; i--) {
       const ratio = (n - 1 - i) / Math.max(n - 1, 1);
       const x = Number((midX * ratio).toFixed(1));
       const cumTotal = activeBids[i][2];
-      const y = Number((baselineY - (cumTotal / maxCumulative) * maxHeight).toFixed(1));
-      bidPath += ` L ${x} ${y}`;
+      const y = Number((baselineY - (minHeight + (cumTotal / maxCumulative) * availableHeight)).toFixed(1));
+      bidPoints.push([x, y]);
     }
-    bidPath += ` L ${midX} ${baselineY} Z`;
-  } else {
-    bidPath = `M 0 ${baselineY} L ${midX} ${baselineY} Z`;
+    const { fill, stroke } = buildSplineSegments(bidPoints);
+    bidFillPath = `M 0 ${baselineY} ${fill} L ${midX} ${baselineY} Z`;
+    bidStrokePath = stroke;
   }
 
-  // Build SVG Path for Asks (Right Mountain: midX -> W)
-  let askPath = `M ${midX} ${baselineY}`;
+  // Build points for Asks (Right Mountain: x = midX -> W)
+  let askFillPath = `M ${midX} ${baselineY} L ${W} ${baselineY} Z`;
+  let askStrokePath = '';
   if (activeAsks.length > 0) {
+    const askPoints: [number, number][] = [];
     const m = activeAsks.length;
     // Walk from best ask (midX, index 0) to highest ask (far right, index m - 1)
     for (let j = 0; j < m; j++) {
       const ratio = j / Math.max(m - 1, 1);
       const x = Number((midX + (W - midX) * ratio).toFixed(1));
       const cumTotal = activeAsks[j][2];
-      const y = Number((baselineY - (cumTotal / maxCumulative) * maxHeight).toFixed(1));
-      askPath += ` L ${x} ${y}`;
+      const y = Number((baselineY - (minHeight + (cumTotal / maxCumulative) * availableHeight)).toFixed(1));
+      askPoints.push([x, y]);
     }
-    askPath += ` L ${W} ${baselineY} Z`;
-  } else {
-    askPath = `M ${midX} ${baselineY} L ${W} ${baselineY} Z`;
+    const { fill, stroke } = buildSplineSegments(askPoints);
+    askFillPath = `M ${midX} ${baselineY} ${fill} L ${W} ${baselineY} Z`;
+    askStrokePath = stroke;
   }
 
   // Liquidity Gap label
@@ -146,8 +154,8 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
 
   return (
     <View style={styles.container}>
-      {/* Header & Legend */}
-      <View style={styles.headerRow}>
+      {/* Header & Legend (Left-aligned & stacked per Mockup 3) */}
+      <View style={styles.header}>
         <Text style={styles.title}>MARKET DEPTH</Text>
 
         <View style={styles.legendRow}>
@@ -176,48 +184,55 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
         <Svg width={W} height={H}>
           <Defs>
             <LinearGradient id="bidGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={colors.bidGreen} stopOpacity="0.45" />
+              <Stop offset="0%" stopColor={colors.bidGreen} stopOpacity="0.35" />
               <Stop offset="100%" stopColor={colors.bidGreen} stopOpacity="0.04" />
             </LinearGradient>
             <LinearGradient id="askGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={colors.askRed} stopOpacity="0.45" />
+              <Stop offset="0%" stopColor={colors.askRed} stopOpacity="0.35" />
               <Stop offset="100%" stopColor={colors.askRed} stopOpacity="0.04" />
             </LinearGradient>
           </Defs>
 
-          {/* Bids Mountain */}
-          <Path d={bidPath} fill="url(#bidGrad)" stroke={colors.bidGreen} strokeWidth="1.5" />
+          {/* Bids Mountain (fill + glowing top contour stroke) */}
+          <Path d={bidFillPath} fill="url(#bidGrad)" />
+          {bidStrokePath ? (
+            <Path d={bidStrokePath} stroke={colors.bidGreen} strokeWidth="1.5" fill="none" />
+          ) : null}
 
-          {/* Asks Mountain */}
-          <Path d={askPath} fill="url(#askGrad)" stroke={colors.askRed} strokeWidth="1.5" />
+          {/* Asks Mountain (fill + glowing top contour stroke) */}
+          <Path d={askFillPath} fill="url(#askGrad)" />
+          {askStrokePath ? (
+            <Path d={askStrokePath} stroke={colors.askRed} strokeWidth="1.5" fill="none" />
+          ) : null}
 
-          {/* Center Mid-Price Dividing Line */}
+          {/* Center Mid-Price Dividing Line (Solid line per Mockup 3) */}
           <Line
             x1={midX}
-            y1={12}
+            y1={0}
             x2={midX}
             y2={baselineY}
-            stroke={colors.border}
+            stroke="rgba(255, 255, 255, 0.12)"
             strokeWidth="1"
-            strokeDasharray="4,4"
           />
         </Svg>
-      </View>
 
-      {/* Floating Analytics Badges */}
-      <View style={styles.badgeOverlay}>
-        <View style={styles.badgeCard}>
-          <Text style={styles.badgeTitle}>LIQUIDITY GAP</Text>
-          <Text style={[styles.badgeValue, { color: gapColor }]}>
-            {gapLabel} ({spreadPct.toFixed(2)}%)
-          </Text>
-        </View>
+        {/* Floating Combined Analytics Badges Card (Bottom-Right overlay per Mockup 3) */}
+        <View style={styles.floatingBadgeCard}>
+          <View style={styles.badgeColumn}>
+            <Text style={styles.badgeTitle}>LIQUIDITY GAP</Text>
+            <Text style={[styles.badgeValue, { color: gapColor }]}>
+              {gapLabel} ({spreadPct.toFixed(2)}%)
+            </Text>
+          </View>
 
-        <View style={styles.badgeCard}>
-          <Text style={styles.badgeTitle}>PRESSURE</Text>
-          <Text style={[styles.badgeValue, { color: pressureColor }]}>
-            {pressureLabel}
-          </Text>
+          <View style={styles.badgeDivider} />
+
+          <View style={styles.badgeColumn}>
+            <Text style={styles.badgeTitle}>PRESSURE</Text>
+            <Text style={[styles.badgeValue, { color: pressureColor }]}>
+              {pressureLabel}
+            </Text>
+          </View>
         </View>
       </View>
     </View>

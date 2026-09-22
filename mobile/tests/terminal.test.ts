@@ -5,6 +5,7 @@ import {
   computePriceDirection,
   isValidMarketPayload,
 } from '../src/context/MarketStreamContext';
+import { buildSplineSegments } from '../src/utils/chartUtils';
 
 describe('Pro Terminal & Order Book Logic (Phase 5: Tasks T5.1 - T5.5)', () => {
   describe('Fallback Payload Generator (Cold Start & Offline Resilience)', () => {
@@ -115,6 +116,28 @@ describe('Pro Terminal & Order Book Logic (Phase 5: Tasks T5.1 - T5.5)', () => {
 
       expect(emptyBidsPath).toBe('M 0 152 L 180 152 Z');
       expect(emptyAsksPath).toBe('M 180 152 L 360 152 Z');
+    });
+
+    it('should generate smooth cubic Bezier spline segments via buildSplineSegments', () => {
+      const points: [number, number][] = [
+        [0, 120],
+        [90, 80],
+        [180, 140],
+      ];
+      const { fill, stroke } = buildSplineSegments(points);
+
+      expect(fill).toContain('L 0.0 120.0');
+      expect(fill).toContain('C ');
+      expect(stroke).toContain('M 0.0 120.0');
+      expect(stroke).toContain('C ');
+    });
+
+    it('should handle edge cases in buildSplineSegments cleanly', () => {
+      expect(buildSplineSegments([])).toEqual({ fill: '', stroke: '' });
+      expect(buildSplineSegments([[50, 100]])).toEqual({
+        fill: 'L 50.0 100.0',
+        stroke: 'M 50.0 100.0',
+      });
     });
   });
 
