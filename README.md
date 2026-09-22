@@ -46,11 +46,17 @@ This single command:
 - Logs are color-prefixed (`[docker-be]` / `[mobile]`) in one terminal
 - `Ctrl-C` cleanly stops both
 
-### Step 3: Open the App on Android Emulator
+### Step 3: Launch the App
 
-Once you see the Expo QR code in the terminal, press **`a`** to install and launch the app on your running Android emulator.
+Once you see the Expo QR code in the terminal:
 
-The mobile app automatically connects to the backend gateway at `ws://10.0.2.2:8080/ws` (Android emulator's loopback to host port 8080).
+| Target | Key / Command | Gateway URL (auto-detected) |
+|---|---|---|
+| **Android Emulator** | Press **`a`** | `ws://10.0.2.2:8080/ws` |
+| **iOS Simulator** | Press **`i`** | `ws://localhost:8080/ws` |
+| **Physical Device (Expo Go)** | Scan QR code | Set `EXPO_PUBLIC_GATEWAY_URL=ws://<your-lan-ip>:8080/ws` before starting |
+
+The gateway URL is **automatically detected per platform** — no manual configuration needed for emulators/simulators.
 
 ---
 
@@ -67,7 +73,7 @@ npm run docker:up
 ```bash
 npm run dev:mobile
 ```
-Then press `a` to open on the Android emulator.
+Then press `a` (Android), `i` (iOS), or scan QR (physical device).
 
 ---
 

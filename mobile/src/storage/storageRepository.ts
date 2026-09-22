@@ -53,7 +53,25 @@ export const STORAGE_KEYS = {
 
 export const DEFAULT_FAVORITES = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 export const DEFAULT_THROTTLE_MS = 100;
-export const DEFAULT_GATEWAY_URL = 'ws://10.0.2.2:8080/ws';
+
+/**
+ * Platform-aware default gateway URL.
+ * - Android Emulator: 10.0.2.2 is the special alias to the host machine's loopback.
+ * - iOS Simulator: shares host network, so localhost works directly.
+ * - Vitest/Node: falls back to localhost (no Platform module available).
+ */
+function getDefaultGatewayUrl(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Platform } = require('react-native');
+    const host = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+    return `ws://${host}:8080/ws`;
+  } catch {
+    return 'ws://localhost:8080/ws';
+  }
+}
+
+export const DEFAULT_GATEWAY_URL = getDefaultGatewayUrl();
 
 export class StorageRepository {
   private backend: IStorageBackend;

@@ -61,7 +61,8 @@ describe('StorageRepository Synchronous Persistence (Task T3.4)', () => {
     const originalEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
     delete process.env.EXPO_PUBLIC_GATEWAY_URL;
     try {
-      expect(storage.getGatewayUrl()).toBe('ws://10.0.2.2:8080/ws');
+      // In Node/Vitest, Platform is unavailable so default falls back to localhost
+      expect(storage.getGatewayUrl()).toBe('ws://localhost:8080/ws');
     } finally {
       if (originalEnv !== undefined) {
         process.env.EXPO_PUBLIC_GATEWAY_URL = originalEnv;
