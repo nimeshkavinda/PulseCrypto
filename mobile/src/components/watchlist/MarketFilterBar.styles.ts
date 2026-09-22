@@ -3,7 +3,7 @@ import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
 export const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
     backgroundColor: colors.primary,
