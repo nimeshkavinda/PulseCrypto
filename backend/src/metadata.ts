@@ -7,6 +7,7 @@ import {
 
 export class MetadataService {
   private metadataStore: Map<SupportedPairSymbol, PairMetadata> = new Map();
+  private openPriceStore: Map<SupportedPairSymbol, number> = new Map();
 
   constructor() {
     this.initializeDefaults();
@@ -79,6 +80,10 @@ export class MetadataService {
       volume24h = arg6;
     }
 
+    if (openPrice > 0) {
+      this.openPriceStore.set(symbol, openPrice);
+    }
+
     // True 24-hour price change percentage: ((current - open) / open) * 100
     const change24h = openPrice > 0 ? ((lastPrice - openPrice) / openPrice) * 100 : 0;
 
@@ -101,11 +106,18 @@ export class MetadataService {
     const existing = this.metadataStore.get(symbol);
     if (!existing || !Number.isFinite(price) || price <= 0) return;
 
+    const openPrice = this.openPriceStore.get(symbol);
+    const change24h =
+      openPrice && openPrice > 0
+        ? Number((((price - openPrice) / openPrice) * 100).toFixed(2))
+        : existing.change24h;
+
     this.metadataStore.set(symbol, {
       ...existing,
       lastPrice: price,
       high24h: Math.max(existing.high24h, price),
       low24h: Math.min(existing.low24h, price),
+      change24h,
     });
   }
 
