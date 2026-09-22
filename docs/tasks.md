@@ -24,10 +24,10 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ---
 
 ## Phase 3: Mobile Foundation, Design Tokens & Shell
-- [ ] **T3.1**: Initialize Expo React Native mobile project with TypeScript configured for native prebuild (`npx expo run:android`).
-- [ ] **T3.2**: Implement Design System token module (colors `#0B0E14`, `#00C57A`, `#FF3B69`, `#1E2633`, typography, spacing).
-- [ ] **T3.3**: Set up React Navigation: Pro Trader Side Drawer (static UI layout chrome matching Mockup 3) + 4 Bottom Tabs (Terminal, Markets, Telemetry, Settings).
-- [ ] **T3.4**: Implement `StorageRepository` using `react-native-mmkv` for synchronous local persistence.
+- [x] **T3.1**: Initialize Expo React Native mobile project with TypeScript configured for native prebuild (`npx expo run:android`).
+- [x] **T3.2**: Implement Design System token module (colors `#0B0E14`, `#00C57A`, `#FF3B69`, `#1E2633`, typography, spacing).
+- [x] **T3.3**: Set up React Navigation: Pro Trader Side Drawer (static UI layout chrome matching Mockup 3) + 4 Bottom Tabs (Terminal, Markets, Telemetry, Settings).
+- [x] **T3.4**: Implement `StorageRepository` using `react-native-mmkv` for synchronous local persistence.
 
 ---
 
