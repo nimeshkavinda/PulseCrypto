@@ -32,12 +32,11 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
-# Local BMAD & system files (keep repo clean)
+# BMAD & Agent Framework
 .agent/
-.agents/
 .claude/
-_bmad/
 _bmad-output/
+*.user.toml
 
 # Temporary
 scratch/

@@ -1,13 +1,15 @@
 # Git Workflow & Commit Guidelines
 
-This project follows a phase-branched, task-traceable Git workflow.
+This project follows a remote, GitFlow-based branching and review process using GitHub.
 
 ---
 
-## 1. Branching Model
+## 1. Branching & Pull Request Rules
 
 ```
-main                          ← Always in a working, demo-ready state
+main                          ← Always in a working, demo-ready state (Protected)
+  ▲
+  │ (Pull Request reviewed & merged manually by User on GitHub)
   │
   ├─ phase/1-foundation        ← Scaffolding, shared schemas, Dockerfile
   ├─ phase/2-backend           ← Fastify gateway, Binance ingestion, backpressure guard
@@ -19,15 +21,37 @@ main                          ← Always in a working, demo-ready state
   └─ phase/8-docs              ← Final README, demo video recording
 ```
 
-* **Main branch**: `main` must always build, run, and remain in a demo-ready state.
-* **Phase branches**: Created from `main` as `phase/<number>-<name>`.
-* **Merging**: Merged back into `main` using `--no-ff` (non-fast-forward) so individual task commits remain visible in `git log --graph`.
+### Core Rules:
+1. **Remote Repository**: All phase branches are pushed to GitHub (`https://github.com/nimeshkavinda/PulseCrypto.git`).
+2. **Never Commit or Merge Directly to `main`**:
+   * `main` is the protected baseline.
+   * Direct commits to `main` are strictly forbidden (except the initial baseline spec commit).
+   * **Never merge phase branches directly to `main` locally.**
+3. **Pull Request Review Workflow**:
+   * All work is developed and verified on `phase/<number>-<name>`.
+   * When a phase is complete, the branch is pushed to origin:
+     ```bash
+     git push -u origin phase/<number>-<name>
+     ```
+   * A Pull Request is opened on GitHub from `phase/<number>-<name>` into `main`.
+   * **The user manually reviews the PR diff and merges the PR on GitHub.**
+   * Once merged, local `main` is updated:
+     ```bash
+     git checkout main
+     git pull origin main
+     ```
+4. **Annotated Phase Tags**:
+   * After each PR is merged into `main`, an annotated tag is created on `main`:
+     ```bash
+     git tag -a phase-1-complete -m "Phase 1 complete: Scaffolding, shared schemas, and Dockerfile"
+     git push origin phase-1-complete
+     ```
 
 ---
 
-## 2. Commit Convention
+## 2. Commit Convention (Task-ID Traceability)
 
-Every commit follows the Conventional Commits format, scoped to a specific Task ID from `docs/tasks.md`:
+Every commit on a phase branch follows the Conventional Commits format, scoped to the specific Task ID from `docs/tasks.md`:
 
 ```
 <type>(<task-id>): <summary>
@@ -48,20 +72,10 @@ Every commit follows the Conventional Commits format, scoped to a specific Task 
 * `feat(T2.1): create fastify http server with /pairs/meta and /health`
 * `feat(T2.5): implement 3-tier backpressure guard for socket flow control`
 * `test(T2.6): add vitest suites for order book aggregation and backpressure`
-* `docs(spec): add requirements.md, design.md, tasks.md, and git workflow`
 
 ---
 
-## 3. Phase Boundary Tags
-
-After merging each phase branch into `main`, an annotated tag is created on `main`:
-* `phase-1-complete`
-* `phase-2-complete`
-* `phase-3-complete`
-* `phase-4-complete`
-* `phase-5-complete`
-* `phase-6-complete`
-* `phase-7-complete`
-* `phase-8-complete`
-
-These tags provide an instant timeline of project milestones via `git tag`.
+## 3. Commit Granularity & Review Checkpoints
+* One commit per completed, verified task from `docs/tasks.md`.
+* Never commit broken code: verify builds and tests pass locally before committing.
+* Pushing and opening a PR is done at the phase boundary for user manual review.
