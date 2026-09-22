@@ -40,13 +40,6 @@ npm run dev:backend
 
 Builds and starts the Fastify service in Docker on port `8080`, connected to upstream Binance feeds.
 
-Verify gateway health:
-```bash
-curl -s http://localhost:8080/health | jq .
-curl -s http://localhost:8080/pairs/meta | jq .
-curl -s http://localhost:8080/metrics
-```
-
 ### 3. Start Mobile Client (Terminal 2)
 
 #### Via Expo Go
@@ -57,7 +50,10 @@ npm run dev:mobile
 
 - Press `a` for Android Emulator
 - Press `i` for iOS Simulator
-- Scan QR code for physical device on the same LAN (`EXPO_PUBLIC_GATEWAY_URL=ws://<LAN_IP>:8080/ws npm run dev:mobile`)
+- For physical device on the same LAN:
+  1. Find your machine's LAN IP: `ipconfig getifaddr en0`
+  2. Start with gateway override: `EXPO_PUBLIC_GATEWAY_URL=ws://<LAN_IP>:8080/ws npm run dev:mobile`
+  3. Scan the terminal QR code in Expo Go
 
 #### Via Local Native Build
 
@@ -83,6 +79,23 @@ If building remotely via Expo Application Services:
 ```bash
 eas build --profile development --platform ios
 eas build --profile development --platform android
+```
+
+---
+
+## Gateway Verification (Optional)
+
+From a separate terminal tab or window:
+
+```bash
+# Health check & uptime
+curl -s http://localhost:8080/health | jq .
+
+# Live market metadata (prices & 24h stats from Binance)
+curl -s http://localhost:8080/pairs/meta | jq .
+
+# Prometheus metrics
+curl -s http://localhost:8080/metrics
 ```
 
 ---
