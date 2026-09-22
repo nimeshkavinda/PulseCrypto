@@ -1,15 +1,27 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
 export default function SecurityScreen() {
+  const router = useRouter();
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Security & Authentication</Text>
+        <Text style={styles.title}>Account Security</Text>
         <Text style={styles.subtitle}>
-          Two-factor authentication (2FA), biometric login, and active session management.
+          Configure two-factor hardware authentication, biometric lock, and session management.
         </Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.navigate('/')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={16} color={colors.bidGreen} />
+          <Text style={styles.backButtonText}>Return to Terminal</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -46,5 +58,23 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.regular,
     textAlign: 'center',
     lineHeight: typography.lineHeight.body,
+    marginBottom: spacing.lg,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bidGreenSubtle,
+    borderWidth: 1,
+    borderColor: colors.bidGreen,
+    borderRadius: borderRadius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    gap: spacing.xs,
+  },
+  backButtonText: {
+    color: colors.bidGreen,
+    fontSize: typography.fontSize.caption,
+    fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.bold,
   },
 });
