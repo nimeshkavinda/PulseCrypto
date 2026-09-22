@@ -19,7 +19,7 @@ Real-time cryptocurrency market streaming platform. A Fastify WebSocket gateway 
 ## Prerequisites
 
 - **Docker** (Docker Desktop running)
-- **Node.js v24** (see `.nvmrc`)
+- **Node.js** (for running the Expo mobile server)
 - **Android Studio** (Android emulator) and/or **Xcode** (iOS simulator)
 
 > [!TIP]
