@@ -80,7 +80,10 @@ export function MarketPairCard({
       {/* Star Favorite Toggle Button */}
       <TouchableOpacity
         style={styles.favoriteButton}
-        onPress={() => onToggleFavorite(item.symbol)}
+        onPress={(e) => {
+          e.stopPropagation();
+          onToggleFavorite(item.symbol);
+        }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isFavorite }}
