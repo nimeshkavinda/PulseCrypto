@@ -10,7 +10,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { MarketUpdatePayload, SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { colors } from '../../theme/tokens';
-import { formatPrice, formatVolume } from '../../utils/formatters';
+import { formatPrice, formatMarketCap } from '../../utils/formatters';
 import { styles } from './LastPriceHero.styles';
 import { PriceDirection } from '../../hooks/useMarketStream';
 
@@ -131,7 +131,7 @@ export const LastPriceHero = React.memo(function LastPriceHero({
         <View style={[styles.statColumn, styles.statColumnRight]}>
           <Text style={styles.statLabel}>MARKET CAP</Text>
           <Text style={styles.statValue}>
-            ${formatVolume(payload.volume24h)}
+            {formatMarketCap(payload.pair, payload.price)}
           </Text>
         </View>
       </View>

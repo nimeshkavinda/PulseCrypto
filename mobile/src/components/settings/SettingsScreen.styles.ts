@@ -30,13 +30,11 @@ export const styles = StyleSheet.create({
   badgeText: {
     color: colors.bidGreen,
     fontSize: typography.fontSize.caption,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.bold,
   },
   title: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.title,
-    fontWeight: typography.fontWeight.bold,
     fontFamily: typography.fontFamily.heading,
     marginBottom: spacing.sm,
     textAlign: 'center',

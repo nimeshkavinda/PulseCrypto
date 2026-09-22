@@ -18,15 +18,14 @@ export const styles = StyleSheet.create({
   },
   label: {
     fontSize: typography.fontSize.caption,
-    fontFamily: typography.fontFamily.mono,
-    fontWeight: typography.fontWeight.medium,
+    fontFamily: typography.fontFamily.monoMedium,
     color: colors.textMuted,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   timestampText: {
     fontSize: typography.fontSize.caption,
-    fontFamily: typography.fontFamily.mono,
+    fontFamily: typography.fontFamily.monoMedium,
     color: colors.textMuted,
   },
   priceRow: {
@@ -43,7 +42,6 @@ export const styles = StyleSheet.create({
   heroPrice: {
     fontSize: typography.fontSize.display,
     fontFamily: typography.fontFamily.monoBold,
-    fontWeight: typography.fontWeight.bold,
     letterSpacing: -0.5,
   },
   changeBadge: {
@@ -62,7 +60,6 @@ export const styles = StyleSheet.create({
   changeText: {
     fontSize: typography.fontSize.body,
     fontFamily: typography.fontFamily.monoBold,
-    fontWeight: typography.fontWeight.bold,
     marginLeft: 2,
   },
   statsRow: {
@@ -82,17 +79,16 @@ export const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   statLabel: {
-    fontSize: typography.fontSize.caption - 1,
-    fontFamily: typography.fontFamily.mono,
+    fontSize: typography.fontSize.caption - 0.5,
+    fontFamily: typography.fontFamily.monoMedium,
     color: colors.textMuted,
     marginBottom: 2,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   statValue: {
-    fontSize: typography.fontSize.caption,
-    fontFamily: typography.fontFamily.mono,
+    fontSize: typography.fontSize.caption + 1,
+    fontFamily: typography.fontFamily.monoBold,
     color: colors.textSecondary,
-    fontWeight: typography.fontWeight.medium,
   },
 });

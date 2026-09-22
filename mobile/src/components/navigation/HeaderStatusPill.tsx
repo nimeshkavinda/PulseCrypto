@@ -49,7 +49,6 @@ const styles = StyleSheet.create({
   text: {
     fontSize: typography.fontSize.caption - 1,
     fontFamily: typography.fontFamily.monoBold,
-    fontWeight: typography.fontWeight.bold,
     letterSpacing: 0.5,
   },
 });

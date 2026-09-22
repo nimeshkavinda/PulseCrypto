@@ -49,7 +49,6 @@ export default function TabLayout() {
         headerTitleStyle: {
           color: colors.textPrimary,
           fontSize: typography.fontSize.subtitle,
-          fontWeight: typography.fontWeight.bold,
           fontFamily: typography.fontFamily.heading,
         },
         headerLeft: renderHeaderLeft,
@@ -67,7 +66,6 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: {
           fontSize: typography.fontSize.caption,
-          fontWeight: typography.fontWeight.medium,
           fontFamily: typography.fontFamily.medium,
         },
       }}
@@ -82,7 +80,6 @@ export default function TabLayout() {
                 style={{
                   color: colors.textPrimary,
                   fontSize: typography.fontSize.subtitle,
-                  fontWeight: typography.fontWeight.bold,
                   fontFamily: typography.fontFamily.heading,
                   marginRight: 8,
                 }}
@@ -113,7 +110,6 @@ export default function TabLayout() {
                     color: statusColor,
                     fontSize: 10,
                     fontFamily: typography.fontFamily.monoBold,
-                    fontWeight: 'bold',
                     letterSpacing: 0.5,
                   }}
                 >

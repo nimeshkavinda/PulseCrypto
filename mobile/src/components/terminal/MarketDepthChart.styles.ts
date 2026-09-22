@@ -15,8 +15,7 @@ export const styles = StyleSheet.create({
   },
   title: {
     fontSize: typography.fontSize.caption,
-    fontFamily: typography.fontFamily.mono,
-    fontWeight: typography.fontWeight.bold,
+    fontFamily: typography.fontFamily.monoBold,
     color: colors.textMuted,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -38,8 +37,8 @@ export const styles = StyleSheet.create({
     marginRight: 6,
   },
   legendText: {
-    fontSize: typography.fontSize.caption - 1,
-    fontFamily: typography.fontFamily.mono,
+    fontSize: typography.fontSize.caption,
+    fontFamily: typography.fontFamily.monoMedium,
     color: colors.textSecondary,
   },
   chartContainer: {
@@ -61,8 +60,8 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.14)',
     borderRadius: borderRadius.md,
-    width: 204,
-    height: 52,
+    width: 232,
+    height: 54,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -79,16 +78,15 @@ export const styles = StyleSheet.create({
   },
   badgeTitle: {
     fontSize: 9,
-    fontFamily: typography.fontFamily.mono,
+    fontFamily: typography.fontFamily.monoMedium,
     color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   badgeValue: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: typography.fontFamily.monoBold,
-    fontWeight: typography.fontWeight.bold,
   },
   badgeGreenText: {
     color: colors.bidGreen,

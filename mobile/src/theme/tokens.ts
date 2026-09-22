@@ -35,6 +35,14 @@ export const colors = {
 } as const;
 
 export const typography = {
+  /**
+   * Font Families mapped to loaded Google Fonts assets.
+   * NOTE: In React Native on Android, custom font files from @expo-google-fonts
+   * have weights baked directly into the family asset name. Combining these
+   * fontFamilies with a separate `fontWeight` property will cause Android's
+   * Typeface engine to fail lookup and silently fall back to system Roboto.
+   * Always reference the specific weighted fontFamily rather than setting fontWeight.
+   */
   fontFamily: {
     regular: 'Inter_400Regular',
     medium: 'Inter_500Medium',
