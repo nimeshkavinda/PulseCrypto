@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, ScrollView } from 'react-native';
-import { useMarketStream } from '../../hooks/useMarketStream';
+import { useIsFocused } from '@react-navigation/native';
+import { useMarketConnection, useMarketData } from '../../hooks/useMarketStream';
 import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { LastPriceHero } from './LastPriceHero';
 import { OrderBookTable } from './OrderBookTable';
@@ -8,7 +9,15 @@ import { MarketDepthChart } from './MarketDepthChart';
 import { styles } from './TerminalScreen.styles';
 
 export function TerminalScreen() {
-  const { activePair, activePayload, priceDirection } = useMarketStream();
+  const isFocused = useIsFocused();
+  const { activePair } = useMarketConnection();
+  const { activePayload, priceDirection } = useMarketData();
+  const lastRenderedRef = useRef<React.ReactElement | null>(null);
+
+  // When tab is not focused (e.g. user is on Telemetry or Settings), freeze re-renders to save CPU
+  if (!isFocused && lastRenderedRef.current) {
+    return lastRenderedRef.current;
+  }
 
   if (!activePayload) {
     return <View style={styles.container} />;
@@ -20,7 +29,7 @@ export function TerminalScreen() {
   const priceDecimals = pairConfig?.priceDecimals ?? 2;
   const qtyDecimals = pairConfig?.qtyDecimals ?? 4;
 
-  return (
+  const content = (
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -57,4 +66,7 @@ export function TerminalScreen() {
       </ScrollView>
     </View>
   );
+
+  lastRenderedRef.current = content;
+  return content;
 }

@@ -21,14 +21,10 @@ import { BASELINE_PAIRS_METADATA } from '../api/marketApi';
 export type ConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
 export type PriceDirection = 'up' | 'down' | 'neutral';
 
-export interface MarketStreamContextValue {
+export interface MarketConnectionContextValue {
   activePair: SupportedPairSymbol;
   setActivePair: (pair: SupportedPairSymbol) => void;
-  activePayload: MarketUpdatePayload | null;
-  payloads: Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>;
   connectionStatus: ConnectionStatus;
-  prevPrice: number | null;
-  priceDirection: PriceDirection;
   throttleMs: number;
   setThrottle: (intervalMs: number) => void;
   reconnect: () => void;
@@ -38,6 +34,17 @@ export interface MarketStreamContextValue {
   resetMetrics: () => void;
 }
 
+export interface MarketDataContextValue {
+  activePayload: MarketUpdatePayload | null;
+  payloads: Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>;
+  prevPrice: number | null;
+  priceDirection: PriceDirection;
+}
+
+export type MarketStreamContextValue = MarketConnectionContextValue & MarketDataContextValue;
+
+const MarketConnectionContext = createContext<MarketConnectionContextValue | null>(null);
+const MarketDataContext = createContext<MarketDataContextValue | null>(null);
 const MarketStreamContext = createContext<MarketStreamContextValue | null>(null);
 
 /**
@@ -214,10 +221,8 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       prevPriceRef.current = currentPrice;
     }
 
-    // Exactly one setPayloads call per flush pass
+    // Exactly one setPayloads call per flush pass (decoupled from telemetry counters)
     setPayloads((prev) => ({ ...prev, ...snapshot }));
-    setMessagesReceivedTotal(messagesCountRef.current);
-    setLatencyMs(latencyRef.current);
   }, []);
 
   const setActivePair = useCallback(
@@ -350,12 +355,14 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     connect();
 
-    // 1-second rolling calculation for WS message ingestion rate
+    // 1-second rolling calculation for WS message ingestion rate and telemetry counters
     const rateInterval = setInterval(() => {
       const current = messagesCountRef.current;
       const rate = Math.max(0, current - lastSecCountRef.current);
       lastSecCountRef.current = current;
       setIngestionRate(rate);
+      setMessagesReceivedTotal(current);
+      setLatencyMs(latencyRef.current);
     }, 1000);
 
     // Listen for gateway URL changes from Settings screen
@@ -399,15 +406,11 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
 
   const activePayload = payloads[activePair] || null;
 
-  // Memoize context value so consumer components do not re-render unless values actually change
-  const value = useMemo<MarketStreamContextValue>(() => ({
+  // Memoize connection and telemetry context value (isolated from 100ms market tick cascades)
+  const connectionValue = useMemo<MarketConnectionContextValue>(() => ({
     activePair,
     setActivePair,
-    activePayload,
-    payloads,
     connectionStatus,
-    prevPrice,
-    priceDirection,
     throttleMs,
     setThrottle,
     reconnect,
@@ -418,11 +421,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   }), [
     activePair,
     setActivePair,
-    activePayload,
-    payloads,
     connectionStatus,
-    prevPrice,
-    priceDirection,
     throttleMs,
     setThrottle,
     reconnect,
@@ -432,7 +431,50 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     resetMetrics,
   ]);
 
-  return <MarketStreamContext.Provider value={value}>{children}</MarketStreamContext.Provider>;
+  // Memoize real-time market data value (only consumed by active trading views)
+  const dataValue = useMemo<MarketDataContextValue>(() => ({
+    activePayload,
+    payloads,
+    prevPrice,
+    priceDirection,
+  }), [
+    activePayload,
+    payloads,
+    prevPrice,
+    priceDirection,
+  ]);
+
+  // Combined context value for backward compatibility with useMarketStream
+  const streamValue = useMemo<MarketStreamContextValue>(() => ({
+    ...connectionValue,
+    ...dataValue,
+  }), [connectionValue, dataValue]);
+
+  return (
+    <MarketConnectionContext.Provider value={connectionValue}>
+      <MarketDataContext.Provider value={dataValue}>
+        <MarketStreamContext.Provider value={streamValue}>
+          {children}
+        </MarketStreamContext.Provider>
+      </MarketDataContext.Provider>
+    </MarketConnectionContext.Provider>
+  );
+}
+
+export function useMarketConnection(): MarketConnectionContextValue {
+  const ctx = useContext(MarketConnectionContext);
+  if (!ctx) {
+    throw new Error('useMarketConnection must be used within a MarketStreamProvider');
+  }
+  return ctx;
+}
+
+export function useMarketData(): MarketDataContextValue {
+  const ctx = useContext(MarketDataContext);
+  if (!ctx) {
+    throw new Error('useMarketData must be used within a MarketStreamProvider');
+  }
+  return ctx;
 }
 
 export function useMarketStream(): MarketStreamContextValue {

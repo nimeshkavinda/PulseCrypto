@@ -33,7 +33,7 @@ export const MemorySparkline = React.memo(function MemorySparkline() {
   };
 
   const currentMb = dataPoints[dataPoints.length - 1] ?? 142.4;
-  const height = 70;
+  const height = 52;
 
   // Generate smooth SVG spline and filled area
   const { linePath, areaPath } = useMemo(() => {
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   },
   chartWrapper: {
     width: '100%',
-    height: 70,
+    height: 52,
     overflow: 'hidden',
   },
 });

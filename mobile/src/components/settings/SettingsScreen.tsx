@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../../hooks/useSettings';
-import { useMarketStream } from '../../context/MarketStreamContext';
+import { useMarketConnection } from '../../hooks/useMarketStream';
 import { colors } from '../../theme/tokens';
 import { styles } from './SettingsScreen.styles';
 
@@ -33,7 +33,7 @@ export function SettingsScreen() {
     clearCache,
   } = useSettings();
 
-  const { connectionStatus, reconnect } = useMarketStream();
+  const { connectionStatus, reconnect } = useMarketConnection();
 
   const [inputUrl, setInputUrl] = useState<string>(gatewayUrl);
   const [sliderWidth, setSliderWidth] = useState<number>(300);

@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useMarketStream } from '../../context/MarketStreamContext';
+import { useMarketConnection } from '../../hooks/useMarketStream';
 import { useSettings } from '../../hooks/useSettings';
 import { CircularFpsGauge } from './CircularFpsGauge';
 import { MemorySparkline } from './MemorySparkline';
@@ -9,7 +9,7 @@ import { colors } from '../../theme/tokens';
 import { styles } from './TelemetryScreen.styles';
 
 export function TelemetryScreen() {
-  const { ingestionRate, latencyMs, resetMetrics, connectionStatus } = useMarketStream();
+  const { ingestionRate, latencyMs, resetMetrics, connectionStatus } = useMarketConnection();
   const { storageStats } = useSettings();
 
   const handleReset = useCallback(() => {

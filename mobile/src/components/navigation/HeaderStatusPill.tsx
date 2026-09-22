@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useMarketStream } from '../../hooks/useMarketStream';
+import { useMarketConnection } from '../../hooks/useMarketStream';
 import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
 export function HeaderStatusPill() {
-  const { connectionStatus } = useMarketStream();
+  const { connectionStatus } = useMarketConnection();
 
   let dotColor: string;
   let label: string;

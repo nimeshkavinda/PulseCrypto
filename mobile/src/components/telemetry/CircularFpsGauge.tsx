@@ -8,27 +8,38 @@ interface CircularFpsGaugeProps {
   strokeWidth?: number;
 }
 
+const getMonotonicTime = (): number => {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+  return Date.now();
+};
+
 export const CircularFpsGauge = React.memo(function CircularFpsGauge({
-  size = 140,
-  strokeWidth = 10,
+  size = 126,
+  strokeWidth = 8,
 }: CircularFpsGaugeProps) {
   const [fps, setFps] = useState<number>(60);
   const frameCountRef = useRef<number>(0);
-  const lastTimeRef = useRef<number>(performance?.now?.() ?? Date.now());
+  const lastTimeRef = useRef<number>(getMonotonicTime());
   const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
 
-    const measureFps = (now: number) => {
+    const measureFps = () => {
       frameCountRef.current += 1;
+      const now = getMonotonicTime();
       const elapsed = now - lastTimeRef.current;
 
-      if (elapsed >= 500) {
-        // Calculate rolling frames per second
-        const currentFps = Math.min(60, Math.round((frameCountRef.current * 1000) / elapsed));
+      if (elapsed >= 800) {
+        // Calculate rolling frames per second with high accuracy
+        const rawFps = Math.min(60, Math.round((frameCountRef.current * 1000) / elapsed));
         if (active) {
-          setFps(currentFps);
+          setFps((prev) => {
+            // Apply gentle smoothing so minor 1-frame micro-jitter doesn't drop the gauge erratically
+            return Math.min(60, Math.max(1, Math.round(prev * 0.35 + rawFps * 0.65)));
+          });
         }
         frameCountRef.current = 0;
         lastTimeRef.current = now;
@@ -104,7 +115,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 2,
   },
   gaugeWrapper: {
     position: 'relative',
@@ -124,15 +135,15 @@ const styles = StyleSheet.create({
   },
   fpsLabel: {
     fontFamily: typography.fontFamily.regular,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
     letterSpacing: 1,
     marginTop: -2,
   },
   caption: {
     fontFamily: typography.fontFamily.regular,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 12,
+    marginTop: 8,
   },
 });
