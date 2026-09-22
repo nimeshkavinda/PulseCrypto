@@ -17,6 +17,7 @@
     "test:backend": "npm --prefix backend run test",
     "test:mobile": "npm --prefix mobile run test",
     "test": "npm run test:shared && npm run test:backend",
+    "lint": "eslint shared/src backend/src",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down"
   },
@@ -29,5 +30,10 @@
     "websockets"
   ],
   "author": "Amused Group Candidate",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "typescript-eslint": "^8.70.1"
+  }
 }
