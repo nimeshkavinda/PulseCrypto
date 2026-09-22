@@ -162,4 +162,72 @@ describe('BinanceConnector Ingestion & Resiliency (Task T2.2)', () => {
     expect(status).toBe(false);
     ws.terminate();
   });
+
+  it('should drop non-finite depth levels and non-finite miniTicker items without propagating NaN', async () => {
+    const connector = new BinanceConnector({
+      baseUrl: `ws://127.0.0.1:${serverPort}`,
+    });
+
+    let receivedBids: [number, number][] = [];
+    let receivedAsks: [number, number][] = [];
+    connector.onDepth((_sym, bids, asks) => {
+      receivedBids = bids;
+      receivedAsks = asks;
+    });
+
+    let tickerUpdates: Parameters<import('../src/binance.js').TickerUpdateHandler>[0] = [];
+    connector.onTicker((updates) => {
+      tickerUpdates = updates;
+    });
+
+    const connPromise = new Promise<WebSocket>((resolve) => {
+      mockServer.once('connection', (ws) => resolve(ws));
+    });
+
+    connector.connect();
+    const ws = await connPromise;
+
+    // Send malformed depth containing NaN, Infinity, -Infinity, negative price
+    ws.send(
+      JSON.stringify({
+        stream: 'btcusdt@depth20@100ms',
+        data: {
+          bids: [
+            ['64000.0', '1.0'],
+            ['NaN', '2.0'],
+            ['Infinity', '1.0'],
+            ['-50.0', '1.0'],
+          ],
+          asks: [
+            ['64100.0', '1.5'],
+            ['64200.0', 'NaN'],
+          ],
+        },
+      })
+    );
+
+    // Send malformed ticker containing non-finite prices
+    ws.send(
+      JSON.stringify({
+        stream: '!miniTicker@arr',
+        data: [
+          { s: 'BTCUSDT', c: 'NaN', h: '65000', l: '63000', v: '100' },
+          { s: 'ETHUSDT', c: '3500', h: '3600', l: '3400', v: '1000' },
+        ],
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Non-finite depth levels dropped
+    expect(receivedBids).toEqual([[64000.0, 1.0]]);
+    expect(receivedAsks).toEqual([[64100.0, 1.5]]);
+
+    // Non-finite miniTicker item dropped entirely, valid one retained
+    expect(tickerUpdates).toHaveLength(1);
+    expect(tickerUpdates[0].symbol).toBe('ETHUSDT');
+
+    connector.disconnect();
+    ws.terminate();
+  });
 });

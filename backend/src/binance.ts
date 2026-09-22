@@ -133,8 +133,24 @@ export class BinanceConnector {
           const rawBids: [string, string][] = payload.data.bids || [];
           const rawAsks: [string, string][] = payload.data.asks || [];
 
-          const bids: [number, number][] = rawBids.map(([p, q]) => [Number(p), Number(q)]);
-          const asks: [number, number][] = rawAsks.map(([p, q]) => [Number(p), Number(q)]);
+          // Drop non-finite depth levels; never propagate NaN to orderbook
+          const bids: [number, number][] = [];
+          for (const [pStr, qStr] of rawBids) {
+            const p = Number(pStr);
+            const q = Number(qStr);
+            if (Number.isFinite(p) && Number.isFinite(q) && p > 0 && q >= 0) {
+              bids.push([p, q]);
+            }
+          }
+
+          const asks: [number, number][] = [];
+          for (const [pStr, qStr] of rawAsks) {
+            const p = Number(pStr);
+            const q = Number(qStr);
+            if (Number.isFinite(p) && Number.isFinite(q) && p > 0 && q >= 0) {
+              asks.push([p, q]);
+            }
+          }
 
           this.metrics.wsMessagesReceived.inc({ stream: 'depth20', symbol: symbolMatch });
           this.onDepthHandler?.(symbolMatch, bids, asks);
@@ -154,14 +170,31 @@ export class BinanceConnector {
         for (const item of payload.data) {
           const symbol = item.s as SupportedPairSymbol;
           if (SUPPORTED_PAIRS[symbol]) {
-            validUpdates.push({
-              symbol,
-              lastPrice: Number(item.c),
-              high24h: Number(item.h),
-              low24h: Number(item.l),
-              volume24h: Number(item.v),
-            });
-            this.metrics.wsMessagesReceived.inc({ stream: 'miniTicker', symbol });
+            const lastPrice = Number(item.c);
+            const high24h = Number(item.h);
+            const low24h = Number(item.l);
+            const volume24h = Number(item.v);
+
+            // Drop entire item if c/h/l/v not finite; never propagate NaN to metadata
+            if (
+              Number.isFinite(lastPrice) &&
+              Number.isFinite(high24h) &&
+              Number.isFinite(low24h) &&
+              Number.isFinite(volume24h) &&
+              lastPrice >= 0 &&
+              high24h >= 0 &&
+              low24h >= 0 &&
+              volume24h >= 0
+            ) {
+              validUpdates.push({
+                symbol,
+                lastPrice,
+                high24h,
+                low24h,
+                volume24h,
+              });
+              this.metrics.wsMessagesReceived.inc({ stream: 'miniTicker', symbol });
+            }
           }
         }
 
