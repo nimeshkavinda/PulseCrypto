@@ -159,6 +159,20 @@ export class StorageRepository {
     this.set(STORAGE_KEYS.GATEWAY_URL, url);
   }
 
+  public getHttpGatewayUrl(): string {
+    const wsUrl = this.getGatewayUrl();
+    try {
+      const parsed = new URL(wsUrl);
+      const protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+      return `${protocol}//${parsed.host}`;
+    } catch {
+      const replaced = wsUrl.replace(/^wss?:\/\//i, (match) =>
+        match.toLowerCase().startsWith('wss') ? 'https://' : 'http://'
+      );
+      return replaced.replace(/\/ws\/?$/i, '').replace(/\/+$/, '');
+    }
+  }
+
   public getActivePair(): string {
     const val = this.get<string>(STORAGE_KEYS.ACTIVE_PAIR);
     return val || 'BTCUSDT';

@@ -35,7 +35,7 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [ ] **T4.1**: Build Market Watchlist screen displaying all supported trading pairs (BTC, ETH, SOL, DOGE, XRP).
 - [ ] **T4.2**: Implement search and filter bar for trading pairs.
 - [ ] **T4.3**: Implement Favourites toggle with MMKV persistence and automatic restoration on startup.
-- [ ] **T4.4**: Integrate TanStack Query (`@tanstack/react-query`) for `GET /pairs/meta` with pull-to-refresh (`refetch()` on `RefreshControl`) without interrupting active WebSocket streaming.
+- [x] **T4.4**: Integrate TanStack Query (`@tanstack/react-query`) for `GET /pairs/meta` with pull-to-refresh (`refetch()` on `RefreshControl`) without interrupting active WebSocket streaming.
 
 ---
 
