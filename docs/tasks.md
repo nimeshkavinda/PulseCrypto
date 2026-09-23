@@ -43,7 +43,7 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [x] **T5.1**: Build Last Price Header component with 24h change %, 24h high/low, and connection status pill.
 - [x] **T5.2**: Build Live Order Book table (top 10 bids in green, top 10 asks in red) with animated volume depth bars.
 - [x] **T5.3**: Implement UI-thread price flash micro-animations (green for tick up, red for tick down via Reanimated).
-- [x] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with safety-floored redraw cadence (`Math.max(sliderValue, 250)`), Liquidity Gap badge, and Buy/Sell Pressure ratio.
+- [x] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with Liquidity Gap badge and Buy/Sell Pressure label. _(The planned 250 ms redraw floor was not implemented; redraw cadence is handled by the store commit cadence in T11.2, and the chart is reworked in T12.3.)_
 - [x] **T5.5**: Gateway Connection & Navigation Integration:
   - Wire header `LIVE` status pill to active WebSocket connectivity state.
   - Consolidate gateway URL resolution into a single reactive URL utility module (`marketApi.resolveHttpBaseUrl` vs `storage.getHttpGatewayUrl`).
@@ -67,12 +67,12 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ## Phase 7: Offline Resilience, Error Handling & Polish
 - [x] **T7.1**: Implement resilient WebSocket client with exponential backoff reconnection, ping/pong health monitoring, and offline indicator.
 - [x] **T7.2**: Implement stale data cache: maintain most recent market data on screen if backend connection drops.
-- [x] **T7.3**: Verify on Android Emulator and ensure smooth 60 FPS operation under sustained 100ms update bursts.
+- [x] **T7.3**: Manual smoke test on the Android Emulator under sustained 100 ms updates. _(Frame-rate measurement moved to T14.3.)_
 - [x] **T7.4**: Mobile Lifecycle, Resiliency & Testing Hardening:
-  - Wire per-row SYNCED / LIVE indicators to real streaming status.
-  - Implement focus-aware polling (`useFocusEffect` / app background pause) to avoid redundant background network calls.
+  - Wire per-row SYNCED / LIVE indicators to socket connection status. _(Per-row data freshness: T12.1.)_
+  - Pause REST polling and the socket while the app is backgrounded (AppState). _(Focus-aware sampling for telemetry: T13.2.)_
   - Move dev-only tooling (`reactotron-react-native`) to `devDependencies`.
-  - Add hook and component integration tests: `useFavorites` toggle + restore, `FlashList` render, and pull-to-refresh refetch path with `QueryClientProvider` wrapper.
+  - Add storage-level integration tests: favourites toggle + restore, and the pull-to-refresh refetch path through `QueryClient`. _(Component render tests: T11.4.)_
 
 ---
 
