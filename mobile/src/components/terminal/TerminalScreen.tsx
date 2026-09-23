@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ScrollView } from 'react-native';
-import { useMarketStream } from '../../hooks/useMarketStream';
+import { useMarketConnection, useMarketData } from '../../hooks/useMarketStream';
 import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { LastPriceHero } from './LastPriceHero';
 import { OrderBookTable } from './OrderBookTable';
@@ -8,7 +8,8 @@ import { MarketDepthChart } from './MarketDepthChart';
 import { styles } from './TerminalScreen.styles';
 
 export function TerminalScreen() {
-  const { activePair, activePayload, priceDirection } = useMarketStream();
+  const { activePair } = useMarketConnection();
+  const { activePayload, priceDirection } = useMarketData();
 
   if (!activePayload) {
     return <View style={styles.container} />;

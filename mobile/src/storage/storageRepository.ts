@@ -9,6 +9,7 @@ export interface IStorageBackend {
   set(key: string, value: string): void;
   delete(key: string): void;
   clearAll(): void;
+  getAllKeys?(): string[];
 }
 
 class InMemoryStorageBackend implements IStorageBackend {
@@ -28,6 +29,10 @@ class InMemoryStorageBackend implements IStorageBackend {
 
   public clearAll(): void {
     this.map.clear();
+  }
+
+  public getAllKeys(): string[] {
+    return Array.from(this.map.keys());
   }
 }
 
@@ -49,6 +54,8 @@ export const STORAGE_KEYS = {
   THROTTLE_INTERVAL: 'pulse_throttle_ms',
   GATEWAY_URL: 'pulse_gateway_url',
   ACTIVE_PAIR: 'pulse_active_pair',
+  BINARY_COMPRESSION: 'pulse_binary_compression',
+  ADAPTIVE_POLLING: 'pulse_adaptive_polling',
 } as const;
 
 export const DEFAULT_FAVORITES = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
@@ -75,11 +82,45 @@ export const DEFAULT_GATEWAY_URL = getDefaultGatewayUrl();
 
 import { resolveHttpBaseUrl } from '../api/urlUtils';
 
+export interface StorageStats {
+  keysCount: number;
+  estimatedBytes: number;
+  estimatedKb: number;
+  isMeasured: boolean;
+  isNative: boolean;
+}
+
 export class StorageRepository {
   private backend: IStorageBackend;
 
   constructor(customBackend?: IStorageBackend) {
     this.backend = customBackend ?? nativeBackend ?? new InMemoryStorageBackend();
+    this.ensureInitialized();
+  }
+
+  private ensureInitialized(): void {
+    try {
+      if (this.backend.getString(STORAGE_KEYS.FAVORITES) === undefined) {
+        this.backend.set(STORAGE_KEYS.FAVORITES, JSON.stringify(DEFAULT_FAVORITES));
+      }
+      if (this.backend.getString(STORAGE_KEYS.THROTTLE_INTERVAL) === undefined) {
+        this.backend.set(STORAGE_KEYS.THROTTLE_INTERVAL, JSON.stringify(DEFAULT_THROTTLE_MS));
+      }
+      if (this.backend.getString(STORAGE_KEYS.GATEWAY_URL) === undefined) {
+        this.backend.set(STORAGE_KEYS.GATEWAY_URL, JSON.stringify(DEFAULT_GATEWAY_URL));
+      }
+      if (this.backend.getString(STORAGE_KEYS.ACTIVE_PAIR) === undefined) {
+        this.backend.set(STORAGE_KEYS.ACTIVE_PAIR, JSON.stringify('BTCUSDT'));
+      }
+      if (this.backend.getString(STORAGE_KEYS.BINARY_COMPRESSION) === undefined) {
+        this.backend.set(STORAGE_KEYS.BINARY_COMPRESSION, JSON.stringify(true));
+      }
+      if (this.backend.getString(STORAGE_KEYS.ADAPTIVE_POLLING) === undefined) {
+        this.backend.set(STORAGE_KEYS.ADAPTIVE_POLLING, JSON.stringify(false));
+      }
+    } catch {
+      // Backend initialization fallback safe
+    }
   }
 
   public get<T>(key: string): T | null {
@@ -95,6 +136,7 @@ export class StorageRepository {
   public set<T>(key: string, value: T): void {
     try {
       this.backend.set(key, JSON.stringify(value));
+      this.notifyStorageChange();
     } catch (err) {
       console.error(`[StorageRepository] Error writing key "${key}":`, err);
     }
@@ -102,10 +144,12 @@ export class StorageRepository {
 
   public delete(key: string): void {
     this.backend.delete(key);
+    this.notifyStorageChange();
   }
 
   public clearAll(): void {
     this.backend.clearAll();
+    this.notifyStorageChange();
   }
 
   // --- Strongly Typed Domain Accessors & Subscriptions ---
@@ -114,6 +158,24 @@ export class StorageRepository {
   private gatewayUrlListeners = new Set<(url: string) => void>();
   private throttleListeners = new Set<(throttleMs: number) => void>();
   private activePairListeners = new Set<(pair: string) => void>();
+  private storageChangeListeners = new Set<() => void>();
+
+  public subscribeStorageChange(listener: () => void): () => void {
+    this.storageChangeListeners.add(listener);
+    return () => {
+      this.storageChangeListeners.delete(listener);
+    };
+  }
+
+  private notifyStorageChange(): void {
+    for (const listener of this.storageChangeListeners) {
+      try {
+        listener();
+      } catch (err) {
+        console.error('[StorageRepository] Error in storageChange listener:', err);
+      }
+    }
+  }
 
   public subscribeFavorites(listener: (favorites: string[]) => void): () => void {
     this.favoritesListeners.add(listener);
@@ -258,6 +320,63 @@ export class StorageRepository {
     }
     this.set(STORAGE_KEYS.ACTIVE_PAIR, symbol);
     this.notifyActivePair(symbol);
+  }
+
+  public getBinaryCompression(): boolean {
+    const val = this.get<boolean>(STORAGE_KEYS.BINARY_COMPRESSION);
+    return val !== null ? Boolean(val) : true;
+  }
+
+  public setBinaryCompression(enabled: boolean): void {
+    this.set(STORAGE_KEYS.BINARY_COMPRESSION, enabled);
+  }
+
+  public getAdaptivePolling(): boolean {
+    const val = this.get<boolean>(STORAGE_KEYS.ADAPTIVE_POLLING);
+    return val !== null ? Boolean(val) : false;
+  }
+
+  public setAdaptivePolling(enabled: boolean): void {
+    this.set(STORAGE_KEYS.ADAPTIVE_POLLING, enabled);
+  }
+
+  public resetDefaults(): void {
+    this.setFavorites(DEFAULT_FAVORITES);
+    this.setClientThrottle(DEFAULT_THROTTLE_MS);
+    this.setGatewayUrl(DEFAULT_GATEWAY_URL);
+    this.setBinaryCompression(true);
+    this.setAdaptivePolling(false);
+    this.setActivePair('BTCUSDT');
+  }
+
+  public getStorageStats(): StorageStats {
+    const isNative = nativeBackend !== null && this.backend === nativeBackend;
+    if (typeof this.backend.getAllKeys === 'function') {
+      try {
+        const keys = this.backend.getAllKeys();
+        let totalBytes = 0;
+        for (const k of keys) {
+          const val = this.backend.getString(k);
+          totalBytes += (k.length + (val ? val.length : 0)) * 2;
+        }
+        return {
+          keysCount: keys.length,
+          estimatedBytes: totalBytes,
+          estimatedKb: Math.max(1, Math.round(totalBytes / 1024)),
+          isMeasured: true,
+          isNative,
+        };
+      } catch {
+        // Fallback if backend threw
+      }
+    }
+    return {
+      keysCount: 0,
+      estimatedBytes: 0,
+      estimatedKb: 0,
+      isMeasured: false,
+      isNative,
+    };
   }
 }
 

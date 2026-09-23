@@ -25,15 +25,24 @@ async function main() {
     })
     .onTicker((updates) => {
       for (const update of updates) {
-        metadataService.updateFromMiniTicker(
-          update.symbol,
-          update.lastPrice,
-          update.openPrice,
-          update.high24h,
-          update.low24h,
-          update.volume24h,
-          update.change24h
-        );
+        if (update.change24h !== undefined) {
+          metadataService.updateTicker(
+            update.symbol,
+            update.lastPrice,
+            update.high24h,
+            update.low24h,
+            update.volume24h,
+            update.change24h
+          );
+        } else {
+          metadataService.updateFromMiniTicker(
+            update.symbol,
+            update.lastPrice,
+            update.high24h,
+            update.low24h,
+            update.volume24h
+          );
+        }
       }
     })
     .onStatus((connected) => {

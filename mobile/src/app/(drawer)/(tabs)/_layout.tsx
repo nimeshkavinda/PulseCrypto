@@ -8,13 +8,13 @@ import { colors, typography, spacing } from '../../../theme/tokens';
 import { styles } from '../../../components/navigation/TabBar.styles';
 
 import { HeaderStatusPill } from '../../../components/navigation/HeaderStatusPill';
-import { useMarketStream } from '../../../hooks/useMarketStream';
+import { useMarketConnection } from '../../../hooks/useMarketStream';
 import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 
 export default function TabLayout() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { activePair } = useMarketStream();
+  const { activePair, connectionStatus } = useMarketConnection();
 
   const pairDisplayName = SUPPORTED_PAIRS[activePair]?.displayName || 'BTC/USDT';
 
@@ -31,7 +31,6 @@ export default function TabLayout() {
     </TouchableOpacity>
   );
 
-  const { connectionStatus } = useMarketStream();
   const isConnected = connectionStatus === 'CONNECTED';
   const statusColor = isConnected ? colors.bidGreen : connectionStatus === 'DISCONNECTED' ? colors.askRed : '#F59E0B';
   const statusLabel = isConnected ? 'CONNECTED' : connectionStatus;

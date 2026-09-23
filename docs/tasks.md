@@ -52,13 +52,13 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ---
 
 ## Phase 6: System Settings & Telemetry Dashboard (Mobile & Backend Observability)
-- [ ] **T6.1**: Implement Client-Side Data Throttling Configurator slider (10ms–1000ms) to tune client render/flush frequency.
-- [ ] **T6.2**: Implement live Telemetry Performance Dashboard:
+- [x] **T6.1**: Implement Client-Side Data Throttling Configurator slider (10ms–1000ms) to tune client render/flush frequency.
+- [x] **T6.2**: Implement live Telemetry Performance Dashboard:
   - Circular JS Thread Frame Rate gauge (real-time FPS measurement via SVG).
   - Ingestion rate counter (msgs/sec).
   - Memory Footprint Sparkline chart (SVG path).
   - Hardware Acceleration & Storage cards adapted to native platform concepts ("Hermes / JSI Engine: Active", "MMKV Cache: X KB utilized").
-- [ ] **T6.3**: Backend Logging & Production Telemetry Documentation:
+- [x] **T6.3**: Backend Logging & Production Telemetry Documentation:
   - Configure structured JSON logging via Fastify's built-in Pino logger (`fastify.log`) with request ID tracing and log redaction.
   - Document production fleet observability (Prometheus scraping existing `GET /metrics` + centralized Grafana/Datadog dashboards) in README / architecture reference without auxiliary Docker Compose bloat.
 

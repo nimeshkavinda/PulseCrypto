@@ -4,12 +4,12 @@ import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 export const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    borderRadius: borderRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
