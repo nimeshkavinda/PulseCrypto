@@ -117,9 +117,9 @@ _Improvements from end-to-end testing: cut per-client bandwidth, send only what 
 - [x] **T12.4**: Cold start and offline UX: cached data labelled "last seen", skeletons, and an offline banner.
 
 ## Phase 13: Settings Fixes, Native Telemetry & Hardening
-- [ ] **T13.1**: The cadence control drives server `setCadence` and shows the acknowledged value. The gateway editor is available in dev builds only.
-- [ ] **T13.2**: `perf-monitor` Expo Module (Swift + Kotlin) reporting native memory footprint and UI-thread FPS. Telemetry sampling runs only while the screen is focused.
-- [ ] **T13.3**: Dev tooling excluded from release bundles, error boundaries, and cleartext traffic allowed in debug builds only.
+- [x] **T13.1**: The cadence control drives server `setCadence` and shows the acknowledged value. The gateway editor is available in dev builds only.
+- [x] **T13.2**: `perf-monitor` Expo Module (Swift + Kotlin) reporting native memory footprint and UI-thread FPS. Telemetry sampling runs only while the screen is focused.
+- [x] **T13.3**: Dev tooling excluded from release bundles, error boundaries, and cleartext traffic allowed in debug builds only.
 
 ## Phase 14: CI, E2E & Performance Evidence
 - [ ] **T14.1**: GitHub Actions running typecheck, lint, tests and the Docker build, plus the React Hooks/React Native lint rules.

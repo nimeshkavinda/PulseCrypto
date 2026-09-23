@@ -23,9 +23,15 @@ import {
   JetBrainsMono_500Medium,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
-import '../devtools/reactotron';
 
 import { StreamProvider } from '../data/StreamProvider';
+export { ScreenErrorBoundary as ErrorBoundary } from '../components/common/ScreenErrorBoundary';
+
+// Development tooling only: constant-folded out of release bundles.
+if (__DEV__) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../devtools/reactotron');
+}
 
 // Keep the splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync().catch(() => {});

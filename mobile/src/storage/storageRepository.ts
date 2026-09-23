@@ -94,13 +94,13 @@ export const STORAGE_KEYS = {
   CADENCE_MS: 'pulse_cadence_ms',
   /** Developer override of the gateway URL (honoured in development builds only). */
   GATEWAY_URL_OVERRIDE: 'pulse_gateway_url_override',
-  BINARY_COMPRESSION: 'pulse_binary_compression',
+  /** Adaptive update rate: slow the stream on metered (cellular) connections. */
   ADAPTIVE_POLLING: 'pulse_adaptive_polling',
   MARKET_SNAPSHOT: 'pulse_market_snapshot_v1',
 } as const;
 
 /** Keys written by earlier app versions; removed on startup. */
-const LEGACY_KEYS = ['pulse_gateway_url', 'pulse_cached_payloads', 'pulse_throttle_ms'];
+const LEGACY_KEYS = ['pulse_gateway_url', 'pulse_cached_payloads', 'pulse_throttle_ms', 'pulse_binary_compression'];
 
 export const DEFAULT_FAVORITES: SupportedPairSymbol[] = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 export const DEFAULT_ACTIVE_PAIR: SupportedPairSymbol = 'BTCUSDT';
@@ -248,14 +248,6 @@ export class StorageRepository {
     else this.set(STORAGE_KEYS.GATEWAY_URL_OVERRIDE, url);
   }
 
-  public getBinaryCompression(): boolean {
-    return this.get<boolean>(STORAGE_KEYS.BINARY_COMPRESSION) ?? true;
-  }
-
-  public setBinaryCompression(enabled: boolean): void {
-    this.set(STORAGE_KEYS.BINARY_COMPRESSION, enabled);
-  }
-
   public getAdaptivePolling(): boolean {
     return this.get<boolean>(STORAGE_KEYS.ADAPTIVE_POLLING) ?? false;
   }
@@ -270,7 +262,6 @@ export class StorageRepository {
     this.setActivePair(DEFAULT_ACTIVE_PAIR);
     this.setCadenceMs(null);
     this.setGatewayOverride(null);
-    this.setBinaryCompression(true);
     this.setAdaptivePolling(false);
   }
 

@@ -151,6 +151,16 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
   },
+  toggleTextColumn: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  toggleHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+    fontFamily: typography.fontFamily.regular,
+  },
   toggleLabel: {
     fontFamily: typography.fontFamily.medium,
     fontSize: 13,

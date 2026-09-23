@@ -11,6 +11,7 @@ import { HeaderStatusPill, statusColor } from '../../../components/navigation/He
 import { useActivePair, useConnectionState, useUpstream } from '../../../data/store/hooks';
 import { describeStatus } from '../../../data/connectionStatus';
 import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
+export { ScreenErrorBoundary as ErrorBoundary } from '../../../components/common/ScreenErrorBoundary';
 
 export default function TabLayout() {
   const navigation = useNavigation();

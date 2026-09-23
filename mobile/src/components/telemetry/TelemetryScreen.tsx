@@ -11,6 +11,7 @@ import { describeStatus } from '../../data/connectionStatus';
 import { currentGatewayConfig } from '../../config/gateway';
 import { CircularFpsGauge } from './CircularFpsGauge';
 import { MemorySparkline } from './MemorySparkline';
+import { usePerfSamples } from './usePerfSamples';
 import { colors } from '../../theme/tokens';
 import { STORAGE_ENGINE_LABEL } from '../../storage/engineLabel';
 import { styles } from './TelemetryScreen.styles';
@@ -22,6 +23,7 @@ export function TelemetryScreen() {
   // Measure the same live stream the terminal consumes: tickers plus the active pair's book.
   useChannels(['tickers', `book:${pair}`], isFocused);
   const { rates, reset } = useStreamStats(isFocused);
+  const perf = usePerfSamples(isFocused);
   const connection = useConnection();
   const status = describeStatus(connection.state, useUpstream());
   const { storageStats } = useSettings();
@@ -90,7 +92,7 @@ export function TelemetryScreen() {
 
         {/* 1. Circular JS Thread FPS Gauge */}
         <View style={styles.metricBox}>
-          <CircularFpsGauge />
+          <CircularFpsGauge uiFps={perf.uiFps} jsFps={perf.jsFps} nativeAvailable={perf.nativeAvailable} />
         </View>
 
         {/* 2. WS Message Ingestion Rate */}
@@ -108,7 +110,7 @@ export function TelemetryScreen() {
 
         {/* 3. Memory Footprint Tracker Sparkline */}
         <View style={styles.metricBox}>
-          <MemorySparkline />
+          <MemorySparkline samplesMb={perf.memoryMb} nativeAvailable={perf.nativeAvailable} />
         </View>
       </View>
 
@@ -133,10 +135,10 @@ export function TelemetryScreen() {
               { color: isHermes ? colors.bidGreen : colors.textSecondary },
             ]}
           >
-            {isHermes ? 'GPU ACCELERATION' : 'RUNTIME ENGINE'}
+            JS ENGINE
           </Text>
           <Text style={styles.infoTitle}>
-            {isHermes ? 'Hermes / JSI Engine: Active' : 'Hermes / JSI Engine: Unavailable'}
+            {isHermes ? 'Hermes (bytecode, JSI)' : 'Non-Hermes JS runtime'}
           </Text>
         </View>
       </View>

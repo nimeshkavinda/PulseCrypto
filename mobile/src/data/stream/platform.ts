@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { SocketLike, StreamClientDeps } from './MarketStreamClient';
+import { NetworkCost } from '../adaptiveCadence';
 
 /** React Native implementations of the stream client's platform dependencies. */
 export const nativeStreamDeps: StreamClientDeps = {
@@ -30,3 +31,11 @@ export const nativeStreamDeps: StreamClientDeps = {
     clearInterval: (h) => clearInterval(h as ReturnType<typeof setInterval>),
   },
 };
+
+/** Connection cost (type and metered flag) for adaptive cadence. */
+export function subscribeNetworkCost(onChange: (cost: NetworkCost) => void): () => void {
+  return NetInfo.addEventListener((state) => {
+    const details = state.details as { isConnectionExpensive?: boolean } | null;
+    onChange({ expensive: details?.isConnectionExpensive ?? false, type: state.type });
+  });
+}

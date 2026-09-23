@@ -4,6 +4,7 @@ import { createMarketStore, MarketStore } from './store/marketStore';
 import { FrameScheduler, MarketIngestor } from './store/ingestor';
 import { loadSnapshot, SnapshotPersister } from './store/persistence';
 import { StorageRepository, STORAGE_KEYS } from '../storage/storageRepository';
+import { effectiveCadence, NetworkCost } from './adaptiveCadence';
 
 export interface StreamRuntimeOptions {
   storage: StorageRepository;
@@ -11,6 +12,8 @@ export interface StreamRuntimeOptions {
   /** Resolves the gateway WebSocket URL; re-evaluated when the developer override changes. */
   resolveUrl: () => string;
   scheduleFrame?: FrameScheduler;
+  /** Connection cost updates for adaptive cadence (NetInfo on device). */
+  subscribeNetworkCost?: (onChange: (cost: NetworkCost) => void) => () => void;
 }
 
 /**
@@ -24,6 +27,7 @@ export class StreamRuntime {
   private readonly persister: SnapshotPersister;
   private readonly channelRefs = new Map<string, number>();
   private readonly disposers: Array<() => void> = [];
+  private networkCost: NetworkCost = { expensive: false, type: 'unknown' };
 
   constructor(private readonly opts: StreamRuntimeOptions) {
     const { storage } = opts;
@@ -31,7 +35,17 @@ export class StreamRuntime {
     this.client = new MarketStreamClient({ url: opts.resolveUrl() }, opts.deps);
     this.ingestor = new MarketIngestor(this.store, opts.scheduleFrame);
     this.persister = new SnapshotPersister(this.store, storage);
-    this.client.setCadence(storage.getCadenceMs());
+    this.applyCadence();
+  }
+
+  /** Requests the cadence from the user's preference, adjusted by adaptive mode on metered networks. */
+  private applyCadence(): void {
+    const { storage } = this.opts;
+    const decision = effectiveCadence(storage.getCadenceMs(), storage.getAdaptivePolling(), this.networkCost);
+    this.client.setCadence(decision.cadenceMs);
+    if (this.store.getState().adaptiveActive !== decision.adaptiveActive) {
+      this.store.setState({ adaptiveActive: decision.adaptiveActive });
+    }
   }
 
   public start(): void {
@@ -46,9 +60,18 @@ export class StreamRuntime {
           this.persister.save();
         }
       }),
-      storage.subscribe(STORAGE_KEYS.CADENCE_MS, () => this.client.setCadence(storage.getCadenceMs())),
+      storage.subscribe(STORAGE_KEYS.CADENCE_MS, () => this.applyCadence()),
+      storage.subscribe(STORAGE_KEYS.ADAPTIVE_POLLING, () => this.applyCadence()),
       storage.subscribe(STORAGE_KEYS.GATEWAY_URL_OVERRIDE, () => this.client.setUrl(this.opts.resolveUrl()))
     );
+    if (this.opts.subscribeNetworkCost) {
+      this.disposers.push(
+        this.opts.subscribeNetworkCost((cost) => {
+          this.networkCost = cost;
+          this.applyCadence();
+        })
+      );
+    }
     this.client.start();
     this.persister.start();
   }
