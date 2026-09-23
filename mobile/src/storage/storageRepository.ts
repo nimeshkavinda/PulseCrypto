@@ -56,6 +56,7 @@ export const STORAGE_KEYS = {
   ACTIVE_PAIR: 'pulse_active_pair',
   BINARY_COMPRESSION: 'pulse_binary_compression',
   ADAPTIVE_POLLING: 'pulse_adaptive_polling',
+  CACHED_PAYLOADS: 'pulse_cached_payloads',
 } as const;
 
 export const DEFAULT_FAVORITES = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
@@ -338,6 +339,14 @@ export class StorageRepository {
 
   public setAdaptivePolling(enabled: boolean): void {
     this.set(STORAGE_KEYS.ADAPTIVE_POLLING, enabled);
+  }
+
+  public getCachedPayloads<T = unknown>(): T | null {
+    return this.get<T>(STORAGE_KEYS.CACHED_PAYLOADS);
+  }
+
+  public setCachedPayloads<T = unknown>(payloads: T): void {
+    this.set(STORAGE_KEYS.CACHED_PAYLOADS, payloads);
   }
 
   public resetDefaults(): void {

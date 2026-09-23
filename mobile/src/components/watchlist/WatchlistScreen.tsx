@@ -13,6 +13,7 @@ import { PairMetadata } from '@pulsecrypto/shared';
 import { colors } from '../../theme/tokens';
 import { usePairsMetadata } from '../../hooks/usePairsMetadata';
 import { useFavorites } from '../../hooks/useFavorites';
+import { useMarketConnection } from '../../hooks/useMarketStream';
 import { MarketPairCard } from './MarketPairCard';
 import { MarketFilterBar } from './MarketFilterBar';
 import { filterAndSortPairs, MarketFilterTab } from './filterUtils';
@@ -22,6 +23,8 @@ import { styles } from './WatchlistScreen.styles';
 export function WatchlistScreen() {
   const router = useRouter();
   const { data: pairs, refetch, isLoading } = usePairsMetadata();
+  const { connectionStatus } = useMarketConnection();
+  const isLive = connectionStatus === 'CONNECTED';
   const [favorites, toggleFavorite] = useFavorites();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<MarketFilterTab>('ALL');
@@ -54,11 +57,12 @@ export function WatchlistScreen() {
       <MarketPairCard
         item={item}
         isFavorite={favorites.includes(item.symbol)}
+        isLive={isLive}
         onToggleFavorite={toggleFavorite}
         onPress={handleSelectPair}
       />
     ),
-    [favorites, toggleFavorite, handleSelectPair]
+    [favorites, isLive, toggleFavorite, handleSelectPair]
   );
 
   const keyExtractor = useCallback((item: PairMetadata) => item.symbol, []);

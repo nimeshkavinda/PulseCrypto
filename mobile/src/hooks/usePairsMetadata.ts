@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPairsMetadata, BASELINE_PAIRS_METADATA } from '../api/marketApi';
 import { PairMetadata } from '@pulsecrypto/shared';
@@ -15,19 +16,35 @@ export interface UsePairsMetadataResult {
 
 export function usePairsMetadata(): UsePairsMetadataResult {
   const [gatewayUrl, setGatewayUrl] = useState<string>(() => defaultStorage.getHttpGatewayUrl());
+  const [isAppActive, setIsAppActive] = useState<boolean>(() => {
+    try {
+      return AppState.currentState === 'active';
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     const unsubscribe = defaultStorage.subscribeGatewayUrl(() => {
       setGatewayUrl(defaultStorage.getHttpGatewayUrl());
     });
-    return unsubscribe;
+
+    const subscription = AppState.addEventListener('change', (status: AppStateStatus) => {
+      setIsAppActive(status === 'active');
+    });
+
+    return () => {
+      unsubscribe();
+      subscription.remove();
+    };
   }, []);
 
   const query = useQuery({
     queryKey: ['pairsMetadata', gatewayUrl],
     queryFn: () => fetchPairsMetadata(gatewayUrl),
     staleTime: 5000,
-    refetchInterval: 10000, // Background poll every 10s for 24h stats
+    // When the app is in the background, pause 10s REST polling to prevent radio wakeups
+    refetchInterval: isAppActive ? 10000 : false,
     refetchOnWindowFocus: false,
     initialData: BASELINE_PAIRS_METADATA,
   });

@@ -65,10 +65,10 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ---
 
 ## Phase 7: Offline Resilience, Error Handling & Polish
-- [ ] **T7.1**: Implement resilient WebSocket client with exponential backoff reconnection, ping/pong health monitoring, and offline indicator.
-- [ ] **T7.2**: Implement stale data cache: maintain most recent market data on screen if backend connection drops.
-- [ ] **T7.3**: Verify on Android Emulator and ensure smooth 60 FPS operation under sustained 100ms update bursts.
-- [ ] **T7.4**: Mobile Lifecycle, Resiliency & Testing Hardening:
+- [x] **T7.1**: Implement resilient WebSocket client with exponential backoff reconnection, ping/pong health monitoring, and offline indicator.
+- [x] **T7.2**: Implement stale data cache: maintain most recent market data on screen if backend connection drops.
+- [x] **T7.3**: Verify on Android Emulator and ensure smooth 60 FPS operation under sustained 100ms update bursts.
+- [x] **T7.4**: Mobile Lifecycle, Resiliency & Testing Hardening:
   - Wire per-row SYNCED / LIVE indicators to real streaming status.
   - Implement focus-aware polling (`useFocusEffect` / app background pause) to avoid redundant background network calls.
   - Move dev-only tooling (`reactotron-react-native`) to `devDependencies`.

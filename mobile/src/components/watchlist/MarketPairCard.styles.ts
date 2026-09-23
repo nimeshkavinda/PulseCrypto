@@ -50,6 +50,27 @@ export const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bold,
     letterSpacing: 0.5,
   },
+  syncedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+    borderRadius: borderRadius.pill,
+  },
+  syncedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F59E0B',
+    marginRight: 4,
+  },
+  syncedText: {
+    color: '#F59E0B',
+    fontSize: 9,
+    fontFamily: typography.fontFamily.bold,
+    letterSpacing: 0.5,
+  },
   volumeText: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.caption,
