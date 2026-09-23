@@ -166,6 +166,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const lastMessageAtRef = useRef<number>(Date.now());
   const isAppActiveRef = useRef<boolean>(true);
   const throttleIntervalRef = useRef<number>(defaultStorage.getClientThrottle());
+  const lastCacheWriteRef = useRef<number>(Date.now());
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -440,7 +441,9 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       setLatencyMs(latencyRef.current);
 
       // Periodically persist LVC snapshot to MMKV cache for offline resilience (every 5s)
-      if (current > 0 && current % 5 === 0 && Object.keys(lvcRef.current).length > 0) {
+      const now = Date.now();
+      if (now - lastCacheWriteRef.current >= 5000 && Object.keys(lvcRef.current).length > 0) {
+        lastCacheWriteRef.current = now;
         try {
           defaultStorage.setCachedPayloads(lvcRef.current);
         } catch {
