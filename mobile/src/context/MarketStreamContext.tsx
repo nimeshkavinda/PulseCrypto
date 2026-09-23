@@ -239,15 +239,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
     }
 
     // Exactly one setPayloads call per flush pass (decoupled from telemetry counters)
-    setPayloads((prev) => {
-      const merged = { ...prev, ...snapshot };
-      try {
-        defaultStorage.setCachedPayloads(merged);
-      } catch {
-        // ignore storage errors
-      }
-      return merged;
-    });
+    setPayloads((prev) => ({ ...prev, ...snapshot }));
   }, []);
 
   const setActivePair = useCallback(
@@ -385,6 +377,11 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
           clearInterval(pingIntervalRef.current);
           pingIntervalRef.current = null;
         }
+        try {
+          defaultStorage.setCachedPayloads(lvcRef.current);
+        } catch {
+          // ignore
+        }
         if (reconnectAttemptsRef.current >= 3) {
           setConnectionStatus('OFFLINE');
         } else {
@@ -441,6 +438,15 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       setIngestionRate(rate);
       setMessagesReceivedTotal(current);
       setLatencyMs(latencyRef.current);
+
+      // Periodically persist LVC snapshot to MMKV cache for offline resilience (every 5s)
+      if (current > 0 && current % 5 === 0 && Object.keys(lvcRef.current).length > 0) {
+        try {
+          defaultStorage.setCachedPayloads(lvcRef.current);
+        } catch {
+          // ignore
+        }
+      }
     }, 1000);
 
     // Listen for gateway URL changes from Settings screen
