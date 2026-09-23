@@ -124,6 +124,9 @@ export function WatchlistScreen() {
         keyExtractor={(item) => item.symbol}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmpty}
+        // Rows and stars respond on the first tap while searching; scrolling dismisses the keyboard.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl refreshing={isManualRefreshing} onRefresh={handleRefresh} tintColor={colors.bidGreen} colors={[colors.bidGreen]} />
         }

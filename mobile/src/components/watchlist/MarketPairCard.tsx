@@ -32,76 +32,77 @@ export const MarketPairCard = React.memo(function MarketPairCard({ row, isFavori
   const halted = row.tradingStatus && row.tradingStatus !== 'TRADING';
   const priceText = values ? `$${formatPrice(values.price, row.priceDecimals)}` : null;
 
+  // The favourite toggle is a sibling of the row's touchable, not a child: an accessible touchable
+  // hides its children from VoiceOver/TalkBack, which made the star unreachable.
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      style={styles.card}
-      onPress={() => onPress(row.symbol)}
-      accessibilityRole="button"
-      accessibilityLabel={
-        values && change
-          ? `${row.displayName}, ${priceText}, 24 hour change ${change.positive ? 'up' : 'down'} ${change.text}, ${FRESHNESS_LABEL[freshness]}`
-          : `${row.displayName}, loading`
-      }
-    >
-      <View style={styles.leftColumn}>
-        <View style={styles.symbolRow}>
-          <Text style={styles.symbolText}>{row.displayName}</Text>
-          <FreshnessBadge freshness={freshness} />
-          {halted ? <Text style={styles.haltedText}>{row.tradingStatus}</Text> : null}
-        </View>
-        {values ? (
-          <>
-            <Text style={styles.volumeText}>
-              Vol: {formatVolume(values.volume24h)} {row.baseAsset}
-            </Text>
-            <View style={styles.rangeRow}>
-              <Text style={styles.rangeLabel}>
-                H: <Text style={styles.rangeValue}>${formatPrice(values.high24h, row.priceDecimals)}</Text>
-              </Text>
-              <Text style={[styles.rangeLabel, styles.rangeMarginLeft]}>
-                L: <Text style={styles.rangeValue}>${formatPrice(values.low24h, row.priceDecimals)}</Text>
-              </Text>
-            </View>
-          </>
-        ) : (
-          <Skeleton width={120} height={12} style={styles.skeletonLine} />
-        )}
-      </View>
-
-      <View style={styles.rightColumn}>
-        {values && change ? (
-          <>
-            <PriceFlash flashKey={row.symbol} price={values.price} style={styles.priceFlash}>
-              <Text style={styles.priceText}>{priceText}</Text>
-            </PriceFlash>
-            <View style={[styles.changePill, change.positive ? styles.changePillPositive : styles.changePillNegative]}>
-              <Text style={[styles.changeText, change.positive ? styles.changeTextPositive : styles.changeTextNegative]}>
-                {change.arrow} {change.text}
-              </Text>
-            </View>
-          </>
-        ) : (
-          <>
-            <Skeleton width={96} height={18} />
-            <Skeleton width={68} height={20} style={styles.skeletonLine} />
-          </>
-        )}
-      </View>
-
+    <View style={styles.card}>
       <TouchableOpacity
-        style={styles.favoriteButton}
-        onPress={(e) => {
-          e.stopPropagation();
-          onToggleFavorite(row.symbol);
-        }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: isFavorite }}
-        accessibilityLabel={`Toggle favourite for ${row.symbol}`}
+        activeOpacity={0.7}
+        style={styles.cardMain}
+        onPress={() => onPress(row.symbol)}
+        accessibilityRole="button"
+        accessibilityLabel={
+          values && change
+            ? `${row.displayName}, ${priceText}, 24 hour change ${change.positive ? 'up' : 'down'} ${change.text}, ${FRESHNESS_LABEL[freshness]}`
+            : `${row.displayName}, loading`
+        }
       >
-        <Ionicons name={isFavorite ? 'star' : 'star-outline'} size={20} color={isFavorite ? colors.warningYellow : colors.textMuted} />
+        <View style={styles.leftColumn}>
+          <View style={styles.symbolRow}>
+            <Text style={styles.symbolText}>{row.displayName}</Text>
+            <FreshnessBadge freshness={freshness} />
+            {halted ? <Text style={styles.haltedText}>{row.tradingStatus}</Text> : null}
+          </View>
+          {values ? (
+            <>
+              <Text style={styles.volumeText}>
+                Vol: {formatVolume(values.volume24h)} {row.baseAsset}
+              </Text>
+              <View style={styles.rangeRow}>
+                <Text style={styles.rangeLabel}>
+                  H: <Text style={styles.rangeValue}>${formatPrice(values.high24h, row.priceDecimals)}</Text>
+                </Text>
+                <Text style={[styles.rangeLabel, styles.rangeMarginLeft]}>
+                  L: <Text style={styles.rangeValue}>${formatPrice(values.low24h, row.priceDecimals)}</Text>
+                </Text>
+              </View>
+            </>
+          ) : (
+            <Skeleton width={120} height={12} style={styles.skeletonLine} />
+          )}
+        </View>
+
+        <View style={styles.rightColumn}>
+          {values && change ? (
+            <>
+              <PriceFlash flashKey={row.symbol} price={values.price} style={styles.priceFlash}>
+                <Text style={styles.priceText}>{priceText}</Text>
+              </PriceFlash>
+              <View style={[styles.changePill, change.positive ? styles.changePillPositive : styles.changePillNegative]}>
+                <Text style={[styles.changeText, change.positive ? styles.changeTextPositive : styles.changeTextNegative]}>
+                  {change.arrow} {change.text}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <Skeleton width={96} height={18} />
+              <Skeleton width={68} height={20} style={styles.skeletonLine} />
+            </>
+          )}
+        </View>
       </TouchableOpacity>
-    </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.favoriteButton}
+          onPress={() => onToggleFavorite(row.symbol)}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isFavorite }}
+          accessibilityLabel={`Toggle favourite for ${row.symbol}`}
+        >
+          <Ionicons name={isFavorite ? 'star' : 'star-outline'} size={20} color={isFavorite ? colors.warningYellow : colors.textMuted} />
+        </TouchableOpacity>
+    </View>
   );
 });
