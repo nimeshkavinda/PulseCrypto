@@ -1,80 +1,77 @@
 import { describe, it, expect } from 'vitest';
-import { OrderBookManager } from '../src/orderbook.js';
-import { MetadataService } from '../src/metadata.js';
-import { MarketUpdatePayloadSchema } from '@pulsecrypto/shared';
+import { BookSchema } from '@pulsecrypto/shared';
+import { OrderBookManager, BOOK_DEPTH } from '../src/orderbook.js';
 
-describe('OrderBookManager & Analytics Engine (Task T2.3)', () => {
-  it('should initialize all 5 supported pair books with valid schema snapshots', () => {
+describe('OrderBookManager', () => {
+  it('reports no book (version 0) until upstream depth arrives', () => {
     const obm = new OrderBookManager();
-    const snapshots = obm.getAllSnapshots();
-
-    expect(snapshots).toHaveLength(5);
-    for (const snap of snapshots) {
-      const parsed = MarketUpdatePayloadSchema.safeParse(snap);
-      expect(parsed.success).toBe(true);
-      expect(snap.buyPressure + snap.sellPressure).toBeCloseTo(100, 2);
-    }
+    expect(obm.getVersion('BTCUSDT')).toBe(0);
+    expect(obm.getBook('BTCUSDT')).toBeNull();
   });
 
-  it('should correctly calculate cumulative totals on bids and asks', () => {
-    const metadataService = new MetadataService();
-    metadataService.updateFromMiniTicker('BTCUSDT', 60000.0, 61000.0, 59000.0, 1000.0);
-    const obm = new OrderBookManager(metadataService);
+  it('bumps the version on every depth update and returns a schema-valid book', () => {
+    const obm = new OrderBookManager();
+    obm.updateDepth('BTCUSDT', [[60000, 1]], [[60001, 1]]);
+    obm.updateDepth('BTCUSDT', [[60000, 2]], [[60001, 1]]);
 
-    const mockBids: [number, number][] = [
-      [60000.0, 1.0], // total: 60000
-      [59900.0, 2.0], // step: 119800, cum: 179800
-    ];
-
-    const mockAsks: [number, number][] = [
-      [60100.0, 1.0], // total: 60100
-      [60200.0, 3.0], // step: 180600, cum: 240700
-    ];
-
-    obm.updateDepth('BTCUSDT', mockBids, mockAsks);
-    const snap = obm.getSnapshot('BTCUSDT');
-
-    expect(snap.bids[0]).toEqual([60000.0, 1.0, 60000.0]);
-    expect(snap.bids[1]).toEqual([59900.0, 2.0, 179800.0]);
-
-    expect(snap.asks[0]).toEqual([60100.0, 1.0, 60100.0]);
-    expect(snap.asks[1]).toEqual([60200.0, 3.0, 240700.0]);
+    const result = obm.getBook('BTCUSDT');
+    expect(result?.version).toBe(2);
+    expect(BookSchema.safeParse(result?.book).success).toBe(true);
   });
 
-  it('should compute accurate spread and buy/sell pressure ratios', () => {
+  it('memoises derivation per version', () => {
+    const obm = new OrderBookManager();
+    obm.updateDepth('ETHUSDT', [[3000, 1]], [[3001, 1]]);
+    expect(obm.getBook('ETHUSDT')).toBe(obm.getBook('ETHUSDT'));
+  });
+
+  it('emits per-level notional as the third tuple element', () => {
     const obm = new OrderBookManager();
     obm.updateDepth(
-      'ETHUSDT',
-      [[3000.0, 3.0]], // 3 ETH bids
-      [[3010.0, 1.0]]  // 1 ETH ask
+      'BTCUSDT',
+      [
+        [60000, 1],
+        [59900, 2],
+      ],
+      [
+        [60100, 1],
+        [60200, 3],
+      ]
     );
-
-    const snap = obm.getSnapshot('ETHUSDT');
-    expect(snap.spread).toBe(10.0);
-    expect(snap.spreadPct).toBeCloseTo((10 / 3000) * 100, 4);
-
-    // Total volume: 4 ETH (3 bid, 1 ask) -> 75% buy, 25% sell
-    expect(snap.buyPressure).toBe(75.0);
-    expect(snap.sellPressure).toBe(25.0);
+    const book = obm.getBook('BTCUSDT')!.book;
+    expect(book.bids).toEqual([
+      [60000, 1, 60000],
+      [59900, 2, 119800],
+    ]);
+    expect(book.asks).toEqual([
+      [60100, 1, 60100],
+      [60200, 3, 180600],
+    ]);
   });
 
-  it('should strictly limit order book depth to 20 levels (depth20)', () => {
+  it('computes spread, spread % and buy/sell pressure from quantities', () => {
     const obm = new OrderBookManager();
-    const lotsOfBids: [number, number][] = Array.from({ length: 35 }, (_, i) => [
-      60000 - i * 10,
-      1.0,
-    ]);
-    const lotsOfAsks: [number, number][] = Array.from({ length: 35 }, (_, i) => [
-      60010 + i * 10,
-      1.0,
-    ]);
+    obm.updateDepth('ETHUSDT', [[3000, 3]], [[3010, 1]]);
+    const book = obm.getBook('ETHUSDT')!.book;
 
-    obm.updateDepth('SOLUSDT', lotsOfBids, lotsOfAsks);
-    const snap = obm.getSnapshot('SOLUSDT');
+    expect(book.spread).toBe(10);
+    expect(book.spreadPct).toBeCloseTo((10 / 3000) * 100, 6);
+    expect(book.buyPressure).toBe(75);
+    expect(book.sellPressure).toBe(25);
+  });
 
-    expect(snap.bids).toHaveLength(20);
-    expect(snap.asks).toHaveLength(20);
-    expect(snap.bids[0][0]).toBeGreaterThan(snap.bids[19][0]); // Bids descending
-    expect(snap.asks[0][0]).toBeLessThan(snap.asks[19][0]);    // Asks ascending
+  it('sorts sides, drops zero-quantity levels and caps depth', () => {
+    const obm = new OrderBookManager();
+    const bids = Array.from({ length: 35 }, (_, i) => [60000 - i * 10, 1] as [number, number]);
+    const asks = Array.from({ length: 35 }, (_, i) => [60010 + i * 10, 1] as [number, number]);
+    bids.push([60005, 0]);
+    obm.updateDepth('SOLUSDT', [...bids].reverse(), [...asks].reverse());
+    const book = obm.getBook('SOLUSDT')!.book;
+
+    expect(book.bids).toHaveLength(BOOK_DEPTH);
+    expect(book.asks).toHaveLength(BOOK_DEPTH);
+    expect(book.bids[0][0]).toBe(60000);
+    expect(book.asks[0][0]).toBe(60010);
+    expect(book.bids.some(([, qty]) => qty === 0)).toBe(false);
   });
 });

@@ -90,11 +90,11 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 
 ## Phase 9: Stream Efficiency & Backpressure Improvements
 _Improvements from end-to-end testing: cut per-client bandwidth, send only what changed, handle slow consumers without wasted writes._
-- [ ] **T9.1**: Define the versioned wire protocol in `shared/src/protocol.ts`, covering the frame envelope, the `hello`/`status`/`tickers`/`book`/`ack`/`pong`/`error` messages, and the client `subscribe`/`unsubscribe`/`setCadence`/`ping` messages. Document it in `docs/protocol.md`.
-- [ ] **T9.2**: `ChannelHub` + `ClientSession`. Clients opt in to channels (`tickers`, `book:<PAIR>`). Each changed item is serialized once per tick, and each client gets at most one batched frame per tick.
-- [ ] **T9.3**: Per-client last-value backpressure. Frames are skipped while the socket is congested, and a skipped client later receives the latest state. Sustained lag closes the socket with 1013.
-- [ ] **T9.4**: Keep schema validation at the inbound boundary only, out of the per-tick path.
-- [ ] **T9.5**: Fastify + `ws` integration test suite.
+- [x] **T9.1**: Define the versioned wire protocol in `shared/src/protocol.ts`, covering the frame envelope, the `hello`/`status`/`tickers`/`book`/`ack`/`pong`/`error` messages, and the client `subscribe`/`unsubscribe`/`setCadence`/`ping` messages. Document it in `docs/protocol.md`.
+- [x] **T9.2**: `ChannelHub` + `ClientSession`. Clients opt in to channels (`tickers`, `book:<PAIR>`). Each changed item is serialized once per tick, and each client gets at most one batched frame per tick.
+- [x] **T9.3**: Per-client last-value backpressure. Frames are skipped while the socket is congested, and a skipped client later receives the latest state. Sustained lag closes the socket with 1013.
+- [x] **T9.4**: Keep schema validation at the inbound boundary only, out of the per-tick path.
+- [x] **T9.5**: Fastify + `ws` integration test suite.
 
 ## Phase 10: Upstream Ingestion Fixes & Gateway Hardening
 - [ ] **T10.1**: Upstream stream set of `depth20@100ms` + `aggTrade` + `ticker`, with a configurable `BINANCE_WS_URL` and a clean connector shutdown.

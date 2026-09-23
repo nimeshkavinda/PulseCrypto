@@ -3,10 +3,13 @@ import client from 'prom-client';
 export class MetricsRegistry {
   public readonly registry: client.Registry;
   public readonly wsMessagesReceived: client.Counter<'stream' | 'symbol'>;
-  public readonly wsBroadcastsSent: client.Counter<'symbol'>;
   public readonly connectedClients: client.Gauge<string>;
-  public readonly backpressureSheddingClients: client.Gauge<string>;
-  public readonly conflationDuration: client.Histogram<string>;
+  public readonly laggingClients: client.Gauge<string>;
+  public readonly framesSent: client.Counter<string>;
+  public readonly framesDropped: client.Counter<string>;
+  public readonly bytesSent: client.Counter<string>;
+  public readonly slowConsumerDisconnects: client.Counter<string>;
+  public readonly tickDuration: client.Histogram<string>;
   public readonly binanceConnectionStatus: client.Gauge<string>;
 
   constructor() {
@@ -25,29 +28,46 @@ export class MetricsRegistry {
       registers: [this.registry],
     });
 
-    this.wsBroadcastsSent = new client.Counter({
-      name: 'pulsecrypto_ws_broadcasts_sent_total',
-      help: 'Total number of conflated market snapshots broadcast to mobile clients',
-      labelNames: ['symbol'],
-      registers: [this.registry],
-    });
-
     this.connectedClients = new client.Gauge({
       name: 'pulsecrypto_connected_clients',
-      help: 'Current count of connected mobile WebSocket clients',
+      help: 'Current count of connected WebSocket clients',
       registers: [this.registry],
     });
 
-    this.backpressureSheddingClients = new client.Gauge({
-      name: 'pulsecrypto_backpressure_shedding_clients',
-      help: 'Number of connected clients currently experiencing depth-shedding backpressure',
+    this.laggingClients = new client.Gauge({
+      name: 'pulsecrypto_lagging_clients',
+      help: 'Clients whose socket buffer exceeded the soft limit on the last tick',
       registers: [this.registry],
     });
 
-    this.conflationDuration = new client.Histogram({
-      name: 'pulsecrypto_conflation_duration_seconds',
-      help: 'Time spent aggregating order books and conflating payloads per cycle',
-      buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1],
+    this.framesSent = new client.Counter({
+      name: 'pulsecrypto_frames_sent_total',
+      help: 'WebSocket frames sent to clients (data and control)',
+      registers: [this.registry],
+    });
+
+    this.framesDropped = new client.Counter({
+      name: 'pulsecrypto_frames_dropped_total',
+      help: 'Data frames skipped because the client socket buffer was above the soft limit',
+      registers: [this.registry],
+    });
+
+    this.bytesSent = new client.Counter({
+      name: 'pulsecrypto_bytes_sent_total',
+      help: 'Bytes of frame payload sent to clients',
+      registers: [this.registry],
+    });
+
+    this.slowConsumerDisconnects = new client.Counter({
+      name: 'pulsecrypto_slow_consumer_disconnects_total',
+      help: 'Clients closed with 1013 for exceeding the hard buffer limit or the lag grace period',
+      registers: [this.registry],
+    });
+
+    this.tickDuration = new client.Histogram({
+      name: 'pulsecrypto_tick_duration_seconds',
+      help: 'Time spent per fan-out tick across all clients',
+      buckets: [0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1],
       registers: [this.registry],
     });
 

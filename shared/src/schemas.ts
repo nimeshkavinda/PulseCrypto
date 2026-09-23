@@ -15,17 +15,22 @@ export type SupportedPairSymbol = z.infer<typeof SupportedPairSymbolSchema>;
 
 /**
  * DepthTuple represents a single price level in the order book:
- * [price (> 0), quantity (>= 0), cumulativeTotal (>= 0)]
+ * [price (> 0), quantity (>= 0), notional (>= 0)].
+ * Protocol v1 sends per-level notional (price * quantity). The deprecated legacy
+ * payload used a cumulative notional in the same slot.
  */
 export const DepthTupleSchema = z.tuple([
   z.number().positive(),   // Price in USDT
   z.number().nonnegative(), // Quantity in base asset
-  z.number().nonnegative(), // Cumulative total (Volume * Price)
+  z.number().nonnegative(), // Notional in quote asset
 ]);
 
 export type DepthTuple = z.infer<typeof DepthTupleSchema>;
 
 /**
+ * @deprecated Legacy (pre-protocol-v1) broadcast payload. Superseded by `Frame`/`Ticker`/`Book`
+ * in protocol.ts. Retained only until the mobile client migrates (Phase 11).
+ *
  * MarketUpdatePayload represents the real-time WebSocket market broadcast.
  * Directly satisfies assignment requirement Part 1, Section 3.
  * Timestamp is unix epoch in milliseconds (ms).
@@ -54,6 +59,7 @@ export const MarketUpdatePayloadSchema = z
     }
   );
 
+/** @deprecated See MarketUpdatePayloadSchema. */
 export type MarketUpdatePayload = z.infer<typeof MarketUpdatePayloadSchema>;
 
 /**
@@ -78,6 +84,9 @@ export const PairMetadataSchema = z.object({
 export type PairMetadata = z.infer<typeof PairMetadataSchema>;
 
 /**
+ * @deprecated Legacy client command. Superseded by `ClientMessageSchema` in protocol.ts.
+ * Retained only until the mobile client migrates (Phase 11).
+ *
  * ClientCommand represents bidirectional commands sent from client to server.
  * Modeled as a strict discriminated union on `action`.
  */
@@ -99,6 +108,7 @@ export const ClientCommandSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
+/** @deprecated See ClientCommandSchema. */
 export type ClientCommand = z.infer<typeof ClientCommandSchema>;
 
 /**

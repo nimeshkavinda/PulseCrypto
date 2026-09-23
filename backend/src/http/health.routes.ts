@@ -1,18 +1,17 @@
 import { FastifyInstance } from 'fastify';
-import { ConflationEngine } from '../conflator.js';
+import { ChannelHub } from '../hub/ChannelHub.js';
 
 export interface HealthRoutesOptions {
-  conflator: ConflationEngine;
+  hub: ChannelHub;
 }
 
 export async function healthRoutes(app: FastifyInstance, options: HealthRoutesOptions): Promise<void> {
-  app.get('/health', async (request) => {
-    request.log.info('[Health] Heartbeat probe checked');
+  app.get('/health', { logLevel: 'debug' }, async () => {
     return {
       status: 'ok',
       uptime: process.uptime(),
       timestamp: Date.now(),
-      clientsConnected: options.conflator.getConnectedClientCount(),
+      clientsConnected: options.hub.getConnectedClientCount(),
     };
   });
 }
