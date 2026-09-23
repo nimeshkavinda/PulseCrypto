@@ -3,8 +3,10 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from 'expo-router';
 import { useSettings } from '../../hooks/useSettings';
-import { useConnection, useUpstream } from '../../data/store/hooks';
+import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
+import { useActivePair, useConnection, useUpstream } from '../../data/store/hooks';
 import { useStreamStats } from '../../data/useStreamStats';
+import { useChannels } from '../../data/useChannels';
 import { describeStatus } from '../../data/connectionStatus';
 import { currentGatewayConfig } from '../../config/gateway';
 import { CircularFpsGauge } from './CircularFpsGauge';
@@ -15,6 +17,10 @@ import { styles } from './TelemetryScreen.styles';
 
 export function TelemetryScreen() {
   const isFocused = useIsFocused();
+  const pair = useActivePair();
+  // Subscriptions are per screen, so without this nothing would stream while this tab is open.
+  // Measure the same live stream the terminal consumes: tickers plus the active pair's book.
+  useChannels(['tickers', `book:${pair}`], isFocused);
   const { rates, reset } = useStreamStats(isFocused);
   const connection = useConnection();
   const status = describeStatus(connection.state, useUpstream());
@@ -93,8 +99,11 @@ export function TelemetryScreen() {
             <Ionicons name="layers" size={20} color={colors.askRed} />
           </View>
           <Text style={styles.ingestionValue}>{ingestionRate}</Text>
-          <Text style={styles.ingestionUnit}>msgs/sec</Text>
+          <Text style={styles.ingestionUnit}>frames/sec</Text>
           <Text style={styles.ingestionCaption}>WS Message Ingestion Rate</Text>
+          <Text style={styles.ingestionDetail}>
+            {rates.messagesPerSec} msgs/s · {rates.kbPerSec} KB/s · tickers + {SUPPORTED_PAIRS[pair].displayName} book
+          </Text>
         </View>
 
         {/* 3. Memory Footprint Tracker Sparkline */}

@@ -117,6 +117,12 @@ export const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: -2,
   },
+  ingestionDetail: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 4,
+    fontFamily: typography.fontFamily.monoMedium,
+  },
   ingestionCaption: {
     fontFamily: typography.fontFamily.regular,
     fontSize: 12,
