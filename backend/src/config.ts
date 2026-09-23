@@ -10,6 +10,12 @@ export const EnvSchema = z.object({
   WS_HARD_LIMIT_BYTES: z.coerce.number().int().positive().default(1024 * 1024),
   /** How long a client may stay above the soft limit before being disconnected. */
   WS_LAG_GRACE_MS: z.coerce.number().int().positive().default(5000),
+  /** Binance WebSocket stream host. Market-data-only alternative: wss://data-stream.binance.vision */
+  BINANCE_WS_URL: z.string().url().default('wss://stream.binance.com:9443'),
+  /** Binance REST host. Market-data-only alternative: https://data-api.binance.vision */
+  BINANCE_REST_URL: z.string().url().default('https://api.binance.com'),
+  /** A pair whose order book has not updated for this long is reported as stale. */
+  STALE_AFTER_MS: z.coerce.number().int().positive().default(3000),
   ALLOWED_ORIGINS: z.string().default('*'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });

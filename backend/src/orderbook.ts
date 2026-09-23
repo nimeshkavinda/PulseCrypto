@@ -58,6 +58,11 @@ export class OrderBookManager {
     book.version += 1;
   }
 
+  /** Gateway receive time of the latest depth update (0 if none yet). */
+  public getUpdatedAt(symbol: SupportedPairSymbol): number {
+    return this.books.get(symbol)?.updatedAt ?? 0;
+  }
+
   public getVersion(symbol: SupportedPairSymbol): number {
     return this.books.get(symbol)?.version ?? 0;
   }

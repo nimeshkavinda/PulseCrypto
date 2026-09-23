@@ -122,7 +122,8 @@ describe('WebSocket stream (Fastify + ws integration)', () => {
   it('streams tickers after subscribing, and nothing before', async () => {
     const c = await client();
     await c.waitFor('hello');
-    metadata.updateTradePrice('BTCUSDT', 65000);
+    metadata.applyTicker24h('BTCUSDT', { lastPrice: 64990, high24h: 66000, low24h: 64000, volume24h: 10, changePct: 1, eventTs: 1 });
+    metadata.applyTrade('BTCUSDT', 65000, 2);
     await new Promise((r) => setTimeout(r, 150));
     expect(c.messages().some((m) => m.type === 'tickers')).toBe(false);
 
@@ -131,7 +132,7 @@ describe('WebSocket stream (Fastify + ws integration)', () => {
     const tickers = await c.waitFor('tickers');
     expect(tickers.data).toEqual([expect.objectContaining({ pair: 'BTCUSDT', price: 65000 })]);
 
-    metadata.updateTradePrice('BTCUSDT', 65001);
+    metadata.applyTrade('BTCUSDT', 65001, 3);
     await c.waitFor('tickers', (t) => t.data[0].price === 65001);
   });
 

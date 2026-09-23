@@ -1,72 +1,78 @@
 import { describe, it, expect } from 'vitest';
+import { PairMetadataSchema } from '@pulsecrypto/shared';
 import { buildApp } from '../src/app.js';
 import { MetadataService } from '../src/metadata.js';
 import { MetricsRegistry } from '../src/metrics.js';
-import { PairMetadataSchema } from '@pulsecrypto/shared';
+import { PAIRS, readyMetadata } from './helpers/market.js';
 
-describe('Fastify HTTP Server & Routes (Task T2.1)', () => {
-  it('should return 200 and valid health payload on GET /health', async () => {
+describe('HTTP routes', () => {
+  it('GET /health returns liveness data', async () => {
     const app = await buildApp({ enableLogger: false });
-    const response = await app.inject({ method: 'GET', url: '/health' });
-
-    expect(response.statusCode).toBe(200);
-    const data = JSON.parse(response.body);
-    expect(data.status).toBe('ok');
-    expect(typeof data.uptime).toBe('number');
-    expect(typeof data.timestamp).toBe('number');
+    const res = await app.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: 'ok', clientsConnected: 0 });
     await app.close();
   });
 
-  it('should return 200 and all 5 pairs metadata conforming to PairMetadataSchema on GET /pairs/meta', async () => {
-    const app = await buildApp({ enableLogger: false });
-    const response = await app.inject({ method: 'GET', url: '/pairs/meta' });
-
-    expect(response.statusCode).toBe(200);
-    const pairs = JSON.parse(response.body);
-    expect(Array.isArray(pairs)).toBe(true);
-    expect(pairs).toHaveLength(5);
-
-    // Verify every single pair conforms to shared Zod schema
-    for (const pair of pairs) {
-      const parsed = PairMetadataSchema.safeParse(pair);
-      expect(parsed.success).toBe(true);
-    }
-
-    const symbols = pairs.map((p: { symbol: string }) => p.symbol);
-    expect(symbols).toContain('BTCUSDT');
-    expect(symbols).toContain('ETHUSDT');
-    expect(symbols).toContain('SOLUSDT');
-    expect(symbols).toContain('DOGEUSDT');
-    expect(symbols).toContain('XRPUSDT');
-
+  it('GET /pairs/meta returns 503 with Retry-After until metadata is loaded', async () => {
+    const app = await buildApp({ enableLogger: false, metadataService: new MetadataService() });
+    const res = await app.inject({ method: 'GET', url: '/pairs/meta' });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['retry-after']).toBe('2');
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.json()).toMatchObject({ error: 'METADATA_UNAVAILABLE' });
     await app.close();
   });
 
-  it('should update pair metadata dynamically via MetadataService', () => {
-    const metadataService = new MetadataService();
-    metadataService.updateFromMiniTicker('BTCUSDT', 67000.0, 68000.0, 63000.0, 31000.0);
-
-    const btc = metadataService.get('BTCUSDT');
-    expect(btc).toBeDefined();
-    expect(btc?.lastPrice).toBe(67000.0);
-    expect(btc?.high24h).toBe(68000.0);
-    expect(btc?.low24h).toBe(63000.0);
-    expect(btc?.volume24h).toBe(31000.0);
+  it('GET /pairs/meta returns every pair with caching headers once ready', async () => {
+    const app = await buildApp({ enableLogger: false, metadataService: readyMetadata() });
+    const res = await app.inject({ method: 'GET', url: '/pairs/meta' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('public, max-age=2');
+    expect(res.headers.etag).toMatch(/^W\/"meta-\d+"$/);
+    const pairs = res.json();
+    expect(pairs.map((p: { symbol: string }) => p.symbol)).toEqual(PAIRS);
+    for (const p of pairs) expect(PairMetadataSchema.safeParse(p).success).toBe(true);
+    await app.close();
   });
 
-  it('should return 200 and Prometheus metrics on GET /metrics', async () => {
+  it('GET /pairs/meta answers 304 for a matching If-None-Match and 200 after data changes', async () => {
+    const metadata = readyMetadata();
+    const app = await buildApp({ enableLogger: false, metadataService: metadata });
+    const first = await app.inject({ method: 'GET', url: '/pairs/meta' });
+    const etag = first.headers.etag as string;
+
+    const cached = await app.inject({ method: 'GET', url: '/pairs/meta', headers: { 'if-none-match': etag } });
+    expect(cached.statusCode).toBe(304);
+    expect(cached.body).toBe('');
+
+    metadata.applyTrade('BTCUSDT', 101, 10_000);
+    const changed = await app.inject({ method: 'GET', url: '/pairs/meta', headers: { 'if-none-match': etag } });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.headers.etag).not.toBe(etag);
+    await app.close();
+  });
+
+  it('GET /pairs/meta strips fields not in the response schema', async () => {
+    const metadata = readyMetadata();
+    const original = metadata.getAll.bind(metadata);
+    metadata.getAll = () => original().map((p) => ({ ...p, internal: 'secret' }));
+    const app = await buildApp({ enableLogger: false, metadataService: metadata });
+    const res = await app.inject({ method: 'GET', url: '/pairs/meta' });
+    expect(res.body).not.toContain('secret');
+    await app.close();
+  });
+
+  it('GET /metrics exposes Prometheus metrics', async () => {
     const metricsRegistry = new MetricsRegistry();
     metricsRegistry.connectedClients.set(4);
-    metricsRegistry.wsMessagesReceived.inc({ stream: 'depth', symbol: 'BTCUSDT' }, 10);
-
+    metricsRegistry.wsMessagesReceived.inc({ stream: 'depth20', symbol: 'BTCUSDT' }, 10);
     const app = await buildApp({ enableLogger: false, metricsRegistry });
-    const response = await app.inject({ method: 'GET', url: '/metrics' });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toContain('text/plain');
-    expect(response.body).toContain('pulsecrypto_connected_clients 4');
-    expect(response.body).toContain('pulsecrypto_ws_messages_received_total{stream="depth",symbol="BTCUSDT"} 10');
-
+    const res = await app.inject({ method: 'GET', url: '/metrics' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    expect(res.body).toContain('pulsecrypto_connected_clients 4');
+    expect(res.body).toContain('pulsecrypto_ws_messages_received_total{stream="depth20",symbol="BTCUSDT"} 10');
     await app.close();
   });
 });

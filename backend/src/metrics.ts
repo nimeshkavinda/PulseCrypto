@@ -3,6 +3,7 @@ import client from 'prom-client';
 export class MetricsRegistry {
   public readonly registry: client.Registry;
   public readonly wsMessagesReceived: client.Counter<'stream' | 'symbol'>;
+  public readonly upstreamMessagesInvalid: client.Counter<'reason'>;
   public readonly connectedClients: client.Gauge<string>;
   public readonly laggingClients: client.Gauge<string>;
   public readonly framesSent: client.Counter<string>;
@@ -25,6 +26,13 @@ export class MetricsRegistry {
       name: 'pulsecrypto_ws_messages_received_total',
       help: 'Total number of WebSocket messages received from Binance streams',
       labelNames: ['stream', 'symbol'],
+      registers: [this.registry],
+    });
+
+    this.upstreamMessagesInvalid = new client.Counter({
+      name: 'pulsecrypto_upstream_messages_invalid_total',
+      help: 'Upstream messages ignored because they were malformed or for unsupported symbols',
+      labelNames: ['reason'],
       registers: [this.registry],
     });
 

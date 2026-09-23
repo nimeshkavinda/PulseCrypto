@@ -15,3 +15,4 @@ Each spec records:
 | Phase | Spec | Status |
 |---|---|---|
 | 9 | [Stream efficiency: protocol v1, channel fan-out and conflating backpressure](./phase-09-stream-efficiency.md) | done |
+| 10a | [Upstream ingestion fixes, REST bootstrap and data freshness](./phase-10a-upstream-ingestion.md) | done |

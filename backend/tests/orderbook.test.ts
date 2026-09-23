@@ -17,6 +17,8 @@ describe('OrderBookManager', () => {
     const result = obm.getBook('BTCUSDT');
     expect(result?.version).toBe(2);
     expect(BookSchema.safeParse(result?.book).success).toBe(true);
+    // Binance partial-depth snapshots carry no event time.
+    expect(result?.book.eventTs).toBeNull();
   });
 
   it('memoises derivation per version', () => {
