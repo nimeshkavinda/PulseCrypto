@@ -1,0 +1,4 @@
+flows:
+  - watchlist.yaml
+  - terminal.yaml
+  - offline.yaml

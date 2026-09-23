@@ -1,0 +1,36 @@
+# Live watchlist, search, and favourites that survive a relaunch.
+appId: com.pulsecrypto.mobile
+name: Watchlist, search and favourites
+tags: [watchlist]
+---
+- launchApp:
+    clearState: true
+- tapOn: 'Markets(, tab.*)?'
+# A row's accessibility label carries its live price once the first tickers frame arrives.
+- extendedWaitUntil:
+    visible: 'BTC / USDT, \$.*'
+    timeout: 30000
+- assertVisible: 'ETH / USDT, \$.*'
+- assertVisible: 'DOGE / USDT, \$.*'
+
+# Search narrows the list.
+- tapOn: Search trading pairs
+- inputText: sol
+- assertVisible: 'SOL / USDT, .*'
+- assertNotVisible: 'BTC / USDT, .*'
+- tapOn: Clear search
+- extendedWaitUntil:
+    visible: 'BTC / USDT, .*'
+    timeout: 10000
+
+# SOL is a default favourite; remove it, then check the change persists across a cold start.
+- tapOn: Toggle favourite for SOLUSDT
+- stopApp
+- launchApp
+- tapOn: 'Markets(, tab.*)?'
+- tapOn: Favourites filter tab
+- extendedWaitUntil:
+    visible: 'BTC / USDT, .*'
+    timeout: 30000
+- assertVisible: 'ETH / USDT, .*'
+- assertNotVisible: 'SOL / USDT, .*'

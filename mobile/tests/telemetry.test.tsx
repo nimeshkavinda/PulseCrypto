@@ -36,6 +36,11 @@ describe('telemetry widgets', () => {
     await render(<MemorySparkline samplesMb={[141.2, 142.8]} nativeAvailable />);
     expect(screen.getByText('142.8 MB')).toBeTruthy();
   });
+
+  it('warns in development builds that the footprint includes debug-only retention', async () => {
+    await render(<MemorySparkline samplesMb={[141.2]} nativeAvailable />);
+    expect(screen.getByText(/Judge memory on a release build/)).toBeTruthy();
+  });
 });
 
 describe('ScreenErrorBoundary', () => {

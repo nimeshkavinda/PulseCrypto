@@ -122,9 +122,9 @@ _Improvements from end-to-end testing: cut per-client bandwidth, send only what 
 - [x] **T13.3**: Dev tooling excluded from release bundles, error boundaries, and cleartext traffic allowed in debug builds only.
 
 ## Phase 14: CI, E2E & Performance Evidence
-- [ ] **T14.1**: GitHub Actions running typecheck, lint, tests and the Docker build, plus the React Hooks/React Native lint rules.
-- [ ] **T14.2**: A Maestro E2E flow covering search, favourite, relaunch, terminal, offline and reconnect.
-- [ ] **T14.3**: Android frame-stats capture under a sustained burst, and the gateway load-test results.
+- [x] **T14.1**: GitHub Actions running typecheck, lint, tests, the Docker build and a load-test smoke run, plus the React Hooks lint rules.
+- [x] **T14.2**: A Maestro E2E flow covering search, favourite, relaunch, terminal, offline and reconnect.
+- [x] **T14.3**: Android frame-stats capture under a sustained burst, and the gateway load-test results.
 
 ## Phase 15: Documentation Updates & Deliverables
 - [ ] **T15.1**: Update the README to match the final implementation: architecture, protocol, buffering strategy, ADRs, scaling analysis, assumptions, trade-offs and AI workflow. The run instructions cover the dev build (primary) and Expo Go (secondary fallback: SQLite-backed storage, no MMKV), plus `EXPO_PUBLIC_GATEWAY_URL` for physical devices.

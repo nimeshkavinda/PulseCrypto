@@ -1,6 +1,6 @@
-# Gateway Performance
+# Performance
 
-Measured with the repository's load-test harness. All numbers are from real runs; this page states the conditions they were measured under and what they do and don't show.
+Two parts: the gateway under load (below), and [the app on device](#on-device-release-builds) under a sustained update burst. All numbers are from real runs; this page states the conditions they were measured under and what they do and don't show.
 
 ```bash
 npm --prefix backend run loadtest -- --clients 5000 --duration 30
@@ -52,3 +52,59 @@ At about 14.5 KB/s per client, **1,000,000 concurrent clients means roughly 14.5
 1. **Send less.** Watchlist screens can request a slower cadence (e.g. `setCadence 500` → 2 frames/s), and backgrounded apps disconnect.
 2. **Encode smaller.** Delta-encode order books (changed levels only) and use a compact binary encoding. `permessage-deflate` trades CPU for bandwidth and fits the ticker channel better than the book channel.
 3. **Fan out closer to users.** Edge gateway replicas per region subscribe to a shared internal feed (see the README's scaling section).
+
+## On device (release builds)
+
+The app was measured on release builds only. Debug builds carry React Native's development tooling and give misleading numbers; see [Memory](#memory).
+
+### Method
+- **Burst source:** the load-test gateway (`backend/scripts/loadtest/server.ts`) on the host with `FLUSH_INTERVAL_MS=50`. That is **20 frames/s, twice the production tick**.
+  - The synthetic feed moves every pair's price every 20 ms, so every frame carries all 5 tickers.
+  - Order books are regenerated every 100 ms, so every level changes.
+  - This is a worst case: live Binance traffic changes far less per frame.
+- **Android:**
+  - Build: release APK (`assembleRelease`, minified Hermes bytecode, debug-signed for local install).
+  - Device: Pixel 10 Pro emulator, API 37, 60 Hz, host-GPU rendering on an Apple M4 Pro.
+  - Tool: `dumpsys gfxinfo` over a 60 s window per screen.
+  - Control: each capture is bracketed by scrolling the system Settings app. A capture counts only if the controls on both sides are clean.
+- **iOS:**
+  - Build: Release configuration on the iOS 27 simulator (iPhone 18 Pro).
+  - Memory: `footprint` (`phys_footprint`, the figure Xcode reports).
+  - FPS: the Telemetry screen's native UI-thread counter (`CADisplayLink`) and its JS-thread `requestAnimationFrame` counter.
+
+### Frame times (Android release, 20 frames/s burst)
+
+| Screen | Frames in 60 s | Frame time p50 / p90 / p99 | Legacy jank (missed vsync) | Control (Settings scroll) p50 / p99, jank |
+|---|---:|---:|---:|---:|
+| Terminal (tickers + one 20-level book, depth chart) | 3,327 | 17 / 18 / 19 ms | 0.4% | 17 / 20 ms, 1.8% |
+| Watchlist (5 live rows with price flashes) | 1,185 | 17 / 20 / 22 ms | 0% | 17 / 21 ms, 0.6% |
+
+- **Frame times stay within one to one-and-a-half vsyncs at twice the production update rate.** No frame exceeded 24 ms on either screen.
+- **The watchlist draws only when something changes.** It produced about 20 frames/s, one per update, rather than redrawing at 60 Hz.
+- **Android's newer deadline-based jank counter** (`Janky frames`) flags 8% of terminal frames and nearly all watchlist frames. Those frames finish at 16–22 ms, so they miss the 16.7 ms deadline by a millisecond or two.
+  - `framestats` attributes this to RenderThread issuing draw commands through the emulator's host-GL translation. The app's own per-frame work (input, animation, layout, draw recording) is about 5 ms.
+  - Confirming this on a physical device is the next step. The emulator can't settle it.
+- **Emulator reliability:** after several minutes of sustained load on a busy host, the emulator degrades, and the Settings control itself drifts to 50%+ jank and a 200 ms p99. Captures from those windows are discarded, not reported.
+- **A change tried and rejected:** removing `overflow: 'hidden'` from the price-flash container. In an A/B with clean controls, both variants measured 17 / 20 / 22–23 ms, so the change was not kept.
+
+### JS thread
+- **iOS release:** the JS thread holds 60 fps while ingesting 20 frames/s (30 msgs/s, 38 KB/s).
+- **Android release, on the emulator:** it measured 31 fps under the same burst, with the UI thread at 60 fps. Scrolling and animation stay on the UI thread, so they stay smooth, but the JS thread is at its limit there.
+  - The production cadence is half this rate.
+  - Watchlist users can request a slower cadence (`setCadence`).
+
+### Memory
+
+| Build | Screen, 20 frames/s | Duration | Footprint | Trend |
+|---|---|---:|---:|---|
+| iOS release | Telemetry, then Terminal | 7 min | 113–130 MB | flat; ~1.2–1.8k live shadow-node families |
+| Android release | Watchlist, then Terminal | 4 min | 240–300 MB PSS (native heap 100–108 MB) | flat |
+| iOS **debug** | Terminal | 33 s | 406 → 567 MB | **grows ~5 MB/s** |
+
+- **The debug-build growth doesn't ship.**
+  - React Native compiles a Fabric leak checker into debug builds (`REACT_NATIVE_DEBUG`, `react/renderer/leakchecker`). It keeps a weak reference to every shadow-node family ever created, until the surface stops.
+  - Fabric creates a new family whenever a `<Text>` string changes, about 35 per update on the terminal. Each weak reference pins its 448-byte allocation.
+  - After half an hour at 20 frames/s, a debug build held 814k dead families (365 MB), plus around 1 GB of other large allocations that are also absent from release.
+  - The Telemetry screen notes this in development builds.
+- **Measured on release, the same screens stay flat.**
+
