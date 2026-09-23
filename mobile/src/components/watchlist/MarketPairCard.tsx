@@ -1,104 +1,107 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PairMetadata } from '@pulsecrypto/shared';
+import { SupportedPairSymbol } from '@pulsecrypto/shared';
+import { useTicker } from '../../data/store/hooks';
+import { usePairFreshness } from '../../data/freshness';
+import { FreshnessBadge, FRESHNESS_LABEL } from '../common/FreshnessBadge';
+import { PriceFlash } from '../common/PriceFlash';
+import { Skeleton } from '../common/Skeleton';
 import { colors } from '../../theme/tokens';
-import { formatPrice, formatVolume } from '../../utils/formatters';
+import { formatChange, formatPrice, formatVolume } from '../../utils/formatters';
+import { WatchRow } from './filterUtils';
 import { styles } from './MarketPairCard.styles';
 
 export interface MarketPairCardProps {
-  item: PairMetadata;
+  row: WatchRow;
   isFavorite: boolean;
-  isLive?: boolean;
-  onToggleFavorite: (symbol: string) => void;
-  onPress: (symbol: string) => void;
+  onToggleFavorite: (symbol: SupportedPairSymbol) => void;
+  onPress: (symbol: SupportedPairSymbol) => void;
 }
 
-export function MarketPairCard({
-  item,
-  isFavorite,
-  isLive = true,
-  onToggleFavorite,
-  onPress,
-}: MarketPairCardProps) {
-  const isPositive = item.change24h >= 0;
-  const changeFormatted = `${isPositive ? '+' : ''}${item.change24h.toFixed(2)}%`;
+/**
+ * One watchlist row, bound to its pair's live ticker. It re-renders only when its own ticker,
+ * freshness or favourite flag changes; other pairs' ticks never touch it.
+ */
+export const MarketPairCard = React.memo(function MarketPairCard({ row, isFavorite, onToggleFavorite, onPress }: MarketPairCardProps) {
+  const ticker = useTicker(row.symbol);
+  const freshness = usePairFreshness(row.symbol, ticker?.updatedAt, ticker?.origin);
+  const values = ticker ?? (row.snapshot && { price: row.snapshot.lastPrice, ...row.snapshot });
+
+  const change = values ? formatChange(values.change24h) : null;
+  const halted = row.tradingStatus && row.tradingStatus !== 'TRADING';
+  const priceText = values ? `$${formatPrice(values.price, row.priceDecimals)}` : null;
 
   return (
     <TouchableOpacity
       activeOpacity={0.7}
       style={styles.card}
-      onPress={() => onPress(item.symbol)}
+      onPress={() => onPress(row.symbol)}
       accessibilityRole="button"
-      accessibilityLabel={`${item.displayName}, price $${item.lastPrice}, 24h change ${changeFormatted}`}
+      accessibilityLabel={
+        values && change
+          ? `${row.displayName}, ${priceText}, 24 hour change ${change.positive ? 'up' : 'down'} ${change.text}, ${FRESHNESS_LABEL[freshness]}`
+          : `${row.displayName}, loading`
+      }
     >
-      {/* Left Column: Asset Info & Live/Synced Pill */}
       <View style={styles.leftColumn}>
         <View style={styles.symbolRow}>
-          <Text style={styles.symbolText}>{item.displayName}</Text>
-          <View style={isLive ? styles.livePill : styles.syncedPill}>
-            <View style={isLive ? styles.liveDot : styles.syncedDot} />
-            <Text style={isLive ? styles.liveText : styles.syncedText}>
-              {isLive ? 'LIVE' : 'SYNCED'}
+          <Text style={styles.symbolText}>{row.displayName}</Text>
+          <FreshnessBadge freshness={freshness} />
+          {halted ? <Text style={styles.haltedText}>{row.tradingStatus}</Text> : null}
+        </View>
+        {values ? (
+          <>
+            <Text style={styles.volumeText}>
+              Vol: {formatVolume(values.volume24h)} {row.baseAsset}
             </Text>
-          </View>
-        </View>
-
-        <Text style={styles.volumeText}>
-          Vol: ${formatVolume(item.volume24h)}
-        </Text>
-
-        <View style={styles.rangeRow}>
-          <Text style={styles.rangeLabel}>
-            H: <Text style={styles.rangeValue}>${formatPrice(item.high24h, item.priceDecimals)}</Text>
-          </Text>
-          <Text style={[styles.rangeLabel, styles.rangeMarginLeft]}>
-            L: <Text style={styles.rangeValue}>${formatPrice(item.low24h, item.priceDecimals)}</Text>
-          </Text>
-        </View>
+            <View style={styles.rangeRow}>
+              <Text style={styles.rangeLabel}>
+                H: <Text style={styles.rangeValue}>${formatPrice(values.high24h, row.priceDecimals)}</Text>
+              </Text>
+              <Text style={[styles.rangeLabel, styles.rangeMarginLeft]}>
+                L: <Text style={styles.rangeValue}>${formatPrice(values.low24h, row.priceDecimals)}</Text>
+              </Text>
+            </View>
+          </>
+        ) : (
+          <Skeleton width={120} height={12} style={styles.skeletonLine} />
+        )}
       </View>
 
-      {/* Right Column: Price & 24h Change Pill */}
       <View style={styles.rightColumn}>
-        <Text style={styles.priceText}>
-          ${formatPrice(item.lastPrice, item.priceDecimals)}
-        </Text>
-
-        <View
-          style={[
-            styles.changePill,
-            isPositive ? styles.changePillPositive : styles.changePillNegative,
-          ]}
-        >
-          <Text
-            style={[
-              styles.changeText,
-              isPositive ? styles.changeTextPositive : styles.changeTextNegative,
-            ]}
-          >
-            {changeFormatted}
-          </Text>
-        </View>
+        {values && change ? (
+          <>
+            <PriceFlash flashKey={row.symbol} price={values.price} style={styles.priceFlash}>
+              <Text style={styles.priceText}>{priceText}</Text>
+            </PriceFlash>
+            <View style={[styles.changePill, change.positive ? styles.changePillPositive : styles.changePillNegative]}>
+              <Text style={[styles.changeText, change.positive ? styles.changeTextPositive : styles.changeTextNegative]}>
+                {change.arrow} {change.text}
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <Skeleton width={96} height={18} />
+            <Skeleton width={68} height={20} style={styles.skeletonLine} />
+          </>
+        )}
       </View>
 
-      {/* Star Favorite Toggle Button */}
       <TouchableOpacity
         style={styles.favoriteButton}
         onPress={(e) => {
           e.stopPropagation();
-          onToggleFavorite(item.symbol);
+          onToggleFavorite(row.symbol);
         }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isFavorite }}
-        accessibilityLabel={`Toggle favourite for ${item.symbol}`}
+        accessibilityLabel={`Toggle favourite for ${row.symbol}`}
       >
-        <Ionicons
-          name={isFavorite ? 'star' : 'star-outline'}
-          size={20}
-          color={isFavorite ? colors.warningYellow : colors.textMuted}
-        />
+        <Ionicons name={isFavorite ? 'star' : 'star-outline'} size={20} color={isFavorite ? colors.warningYellow : colors.textMuted} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
-}
+});

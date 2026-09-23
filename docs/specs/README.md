@@ -18,3 +18,4 @@ Each spec records:
 | 10a | [Upstream ingestion fixes, REST bootstrap and data freshness](./phase-10a-upstream-ingestion.md) | done |
 | 10b | [Gateway hardening, lean image and load-test evidence](./phase-10b-gateway-hardening.md) | done |
 | 11 | [Mobile connection reliability and render performance](./phase-11-mobile-data-layer.md) | done |
+| 12 | [Live watchlist and terminal improvements](./phase-12-live-watchlist-terminal.md) | done |

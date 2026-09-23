@@ -2,6 +2,11 @@ import { StyleSheet } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
 export const styles = StyleSheet.create({
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   container: {
     backgroundColor: colors.surface,
     borderBottomWidth: 1,

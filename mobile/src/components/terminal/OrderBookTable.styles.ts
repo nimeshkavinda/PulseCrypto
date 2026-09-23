@@ -48,10 +48,13 @@ export const styles = StyleSheet.create({
   },
   depthBar: {
     position: 'absolute',
+    left: 0,
     right: 0,
     top: 1,
     bottom: 1,
     borderRadius: borderRadius.xs,
+    // Bars grow leftwards from the row's right edge.
+    transformOrigin: 'right',
   },
   bidDepthBar: {
     backgroundColor: colors.bidGreenSubtle,

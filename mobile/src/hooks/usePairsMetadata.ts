@@ -10,6 +10,8 @@ export interface UsePairsMetadataResult {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
+  /** When metadata was last fetched successfully (epoch ms), 0 if never. */
+  updatedAt: number;
   refetch: () => Promise<unknown>;
 }
 
@@ -37,6 +39,7 @@ export function usePairsMetadata(): UsePairsMetadataResult {
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error as Error | null,
+    updatedAt: query.dataUpdatedAt,
     refetch: query.refetch,
   };
 }

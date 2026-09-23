@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories must use require() */
 /* Jest setup: in-memory stand-ins for native modules that have no JS implementation. */
 import mockNetInfo from '@react-native-community/netinfo/jest/netinfo-mock.js';
 
@@ -50,3 +51,7 @@ jest.mock('expo-sqlite/kv-store', () => {
   }
   return { SQLiteStorage, default: new SQLiteStorage('ExpoSQLiteStorage') };
 });
+
+// Reanimated 4 + Worklets: JS-only implementations for tests (animations resolve synchronously).
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));

@@ -28,21 +28,6 @@ export const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 18,
   },
-  syncBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bidGreenSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.pill,
-    gap: 6,
-  },
-  syncText: {
-    color: colors.bidGreen,
-    fontSize: 10,
-    fontFamily: typography.fontFamily.bold,
-    letterSpacing: 0.5,
-  },
   listContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,

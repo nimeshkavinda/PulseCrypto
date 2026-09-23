@@ -11,8 +11,6 @@ interface OrderBookTableProps {
   quoteAsset: string;
   priceDecimals: number;
   qtyDecimals: number;
-  spread?: number;
-  spreadPct?: number;
 }
 
 export const OrderBookTable = React.memo(function OrderBookTable({
@@ -22,8 +20,6 @@ export const OrderBookTable = React.memo(function OrderBookTable({
   quoteAsset,
   priceDecimals,
   qtyDecimals,
-  spread: _spread = 0,
-  spreadPct: _spreadPct = 0,
 }: OrderBookTableProps) {
   const top10Bids = useMemo(() => bids.slice(0, 10), [bids]);
   const top10Asks = useMemo(() => asks.slice(0, 10), [asks]);

@@ -97,4 +97,23 @@ export const styles = StyleSheet.create({
   badgeNeutralText: {
     color: colors.textSecondary,
   },
+  axisRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  axisMid: {
+    position: 'absolute',
+    top: 4,
+    width: 90,
+    textAlign: 'center',
+    color: colors.textSecondary,
+  },
+  axisText: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontFamily: typography.fontFamily.monoMedium,
+  },
 });

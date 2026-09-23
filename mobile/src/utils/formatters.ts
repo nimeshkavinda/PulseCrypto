@@ -1,54 +1,44 @@
-/**
- * Financial price and volume formatting utilities.
- */
+/** Price, volume, change and time formatting for market data. */
 
 export function formatPrice(price: number, decimals: number): string {
-  if (isNaN(price)) return '0.00';
-  return price.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  if (!Number.isFinite(price)) return '—';
+  return price.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 export function formatVolume(volume: number): string {
-  if (isNaN(volume)) return '0.00';
-  if (volume >= 1_000_000_000) {
-    return `${(volume / 1_000_000_000).toFixed(2)}B`;
-  }
-  if (volume >= 1_000_000) {
-    return `${(volume / 1_000_000).toFixed(2)}M`;
-  }
-  if (volume >= 1_000) {
-    return `${(volume / 1_000).toFixed(2)}K`;
-  }
+  if (!Number.isFinite(volume)) return '—';
+  if (volume >= 1_000_000_000) return `${(volume / 1_000_000_000).toFixed(2)}B`;
+  if (volume >= 1_000_000) return `${(volume / 1_000_000).toFixed(2)}M`;
+  if (volume >= 1_000) return `${(volume / 1_000).toFixed(2)}K`;
   return volume.toFixed(2);
 }
 
-/**
- * Standard circulating supplies across supported pairs for realistic,
- * institutional-grade market cap calculations matching Mockup 3 (e.g. 1.2T for BTC).
- */
-const CIRCULATING_SUPPLY: Record<string, number> = {
-  BTCUSDT: 19_700_000,
-  ETHUSDT: 120_400_000,
-  SOLUSDT: 468_000_000,
-  DOGEUSDT: 146_000_000_000,
-  XRPUSDT: 56_000_000_000,
-};
-
-export function formatMarketCap(pair: string, price: number): string {
-  if (isNaN(price) || price <= 0) return '0.00';
-  const supply = CIRCULATING_SUPPLY[pair] ?? 19_700_000;
-  const mcap = supply * price;
-  if (mcap >= 1_000_000_000_000) {
-    return `${(mcap / 1_000_000_000_000).toFixed(1)}T`;
-  }
-  if (mcap >= 1_000_000_000) {
-    return `${(mcap / 1_000_000_000).toFixed(1)}B`;
-  }
-  if (mcap >= 1_000_000) {
-    return `${(mcap / 1_000_000).toFixed(1)}M`;
-  }
-  return mcap.toLocaleString('en-US', { maximumFractionDigits: 0 });
+export interface FormattedChange {
+  arrow: '▲' | '▼';
+  text: string;
+  positive: boolean;
 }
 
+/** 24h change as shown in the brief's watchlist: "▲ 1.82%" / "▼ 0.41%". Zero counts as up. */
+export function formatChange(pct: number): FormattedChange {
+  const positive = pct >= 0;
+  return { arrow: positive ? '▲' : '▼', text: `${Math.abs(pct).toFixed(2)}%`, positive };
+}
+
+/** Local wall-clock time, HH:MM:SS (24h). */
+export function formatTimeOfDay(epochMs: number): string {
+  const d = new Date(epochMs);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** Compact age: "4s", "12m", "3h", "2d". */
+export function formatAge(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
