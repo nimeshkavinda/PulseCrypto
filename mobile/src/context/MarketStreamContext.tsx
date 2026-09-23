@@ -8,6 +8,7 @@ import React, {
   useMemo,
   ReactNode,
 } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import {
   SupportedPairSymbol,
   MarketUpdatePayload,
@@ -18,7 +19,7 @@ import { defaultStorage } from '../storage/storageRepository';
 import { resolveWsBaseUrl } from '../api/urlUtils';
 import { BASELINE_PAIRS_METADATA } from '../api/marketApi';
 
-export type ConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
+export type ConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'OFFLINE' | 'DISCONNECTED';
 export type PriceDirection = 'up' | 'down' | 'neutral';
 
 export interface MarketConnectionContextValue {
@@ -124,13 +125,25 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   );
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('CONNECTING');
-  const [payloads, setPayloads] = useState<Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>>(() => ({
-    BTCUSDT: createFallbackPayload('BTCUSDT'),
-    ETHUSDT: createFallbackPayload('ETHUSDT'),
-    SOLUSDT: createFallbackPayload('SOLUSDT'),
-    DOGEUSDT: createFallbackPayload('DOGEUSDT'),
-    XRPUSDT: createFallbackPayload('XRPUSDT'),
-  }));
+  const [payloads, setPayloads] = useState<Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>>(() => {
+    const cached = defaultStorage.getCachedPayloads<Partial<Record<SupportedPairSymbol, MarketUpdatePayload>>>();
+    if (cached && typeof cached === 'object') {
+      return {
+        BTCUSDT: cached.BTCUSDT ?? createFallbackPayload('BTCUSDT'),
+        ETHUSDT: cached.ETHUSDT ?? createFallbackPayload('ETHUSDT'),
+        SOLUSDT: cached.SOLUSDT ?? createFallbackPayload('SOLUSDT'),
+        DOGEUSDT: cached.DOGEUSDT ?? createFallbackPayload('DOGEUSDT'),
+        XRPUSDT: cached.XRPUSDT ?? createFallbackPayload('XRPUSDT'),
+      };
+    }
+    return {
+      BTCUSDT: createFallbackPayload('BTCUSDT'),
+      ETHUSDT: createFallbackPayload('ETHUSDT'),
+      SOLUSDT: createFallbackPayload('SOLUSDT'),
+      DOGEUSDT: createFallbackPayload('DOGEUSDT'),
+      XRPUSDT: createFallbackPayload('XRPUSDT'),
+    };
+  });
 
   const [prevPrice, setPrevPrice] = useState<number | null>(null);
   const [priceDirection, setPriceDirection] = useState<PriceDirection>('neutral');
@@ -150,7 +163,10 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
   const latencyRef = useRef<number>(0);
   const pingSentAtRef = useRef<number>(0);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastMessageAtRef = useRef<number>(Date.now());
+  const isAppActiveRef = useRef<boolean>(true);
   const throttleIntervalRef = useRef<number>(defaultStorage.getClientThrottle());
+  const lastCacheWriteRef = useRef<number>(Date.now());
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -279,6 +295,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
 
       ws.onopen = () => {
         reconnectAttemptsRef.current = 0;
+        lastMessageAtRef.current = Date.now();
         setConnectionStatus('CONNECTED');
 
         // Sync initial client throttle to backend
@@ -287,11 +304,23 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
           sendCommand({ action: 'setThrottle', intervalMs: throttle });
         }
 
-        // Start periodic RTT ping (every 5 seconds)
+        // Start periodic RTT ping & dead-socket heartbeat check (every 5 seconds)
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = setInterval(() => {
           if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-            pingSentAtRef.current = Date.now();
+            const now = Date.now();
+            // Zombie socket detection: if >10s elapsed with no messages or pong, force close to trigger reconnect
+            if (now - lastMessageAtRef.current > 10000) {
+              console.warn('[MarketStreamContext] Heartbeat timeout (no message for >10s). Terminating dead socket.');
+              try {
+                socketRef.current.close();
+              } catch {
+                // ignore
+              }
+              return;
+            }
+
+            pingSentAtRef.current = now;
             try {
               socketRef.current.send(JSON.stringify({ action: 'ping' }));
             } catch {
@@ -306,6 +335,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
 
       ws.onmessage = (event: { data: unknown }) => {
         try {
+          lastMessageAtRef.current = Date.now();
           const raw = typeof event.data === 'string' ? JSON.parse(event.data) : null;
 
           // Handle pong response for RTT measurement
@@ -348,19 +378,39 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
           clearInterval(pingIntervalRef.current);
           pingIntervalRef.current = null;
         }
-        setConnectionStatus('RECONNECTING');
+        try {
+          defaultStorage.setCachedPayloads(lvcRef.current);
+        } catch {
+          // ignore
+        }
+        if (reconnectAttemptsRef.current >= 3) {
+          setConnectionStatus('OFFLINE');
+        } else {
+          setConnectionStatus('RECONNECTING');
+        }
         scheduleReconnect();
       };
     } catch {
-      setConnectionStatus('RECONNECTING');
+      if (reconnectAttemptsRef.current >= 3) {
+        setConnectionStatus('OFFLINE');
+      } else {
+        setConnectionStatus('RECONNECTING');
+      }
       scheduleReconnect();
     }
   }, [flushPendingUpdates, sendCommand]);
 
   const scheduleReconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) return;
+    if (!isAppActiveRef.current) return;
 
     reconnectAttemptsRef.current += 1;
+    if (reconnectAttemptsRef.current >= 3) {
+      setConnectionStatus('OFFLINE');
+    } else {
+      setConnectionStatus('RECONNECTING');
+    }
+
     // Exponential backoff with jitter: 1s, 2s, 4s, up to 15s max
     const baseDelay = Math.min(15000, 1000 * Math.pow(1.5, reconnectAttemptsRef.current - 1));
     const jitter = Math.random() * 500;
@@ -389,6 +439,17 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       setIngestionRate(rate);
       setMessagesReceivedTotal(current);
       setLatencyMs(latencyRef.current);
+
+      // Periodically persist LVC snapshot to MMKV cache for offline resilience (every 5s)
+      const now = Date.now();
+      if (now - lastCacheWriteRef.current >= 5000 && Object.keys(lvcRef.current).length > 0) {
+        lastCacheWriteRef.current = now;
+        try {
+          defaultStorage.setCachedPayloads(lvcRef.current);
+        } catch {
+          // ignore
+        }
+      }
     }, 1000);
 
     // Listen for gateway URL changes from Settings screen
@@ -411,7 +472,38 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // App background/foreground lifecycle listener
+    const appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const isNowActive = nextState === 'active';
+      isAppActiveRef.current = isNowActive;
+
+      if (!isNowActive) {
+        // App backgrounded: save snapshot and disconnect socket to save battery and network bandwidth
+        try {
+          defaultStorage.setCachedPayloads(lvcRef.current);
+        } catch {
+          // ignore
+        }
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+        if (socketRef.current) {
+          try {
+            socketRef.current.close();
+          } catch {
+            // ignore
+          }
+        }
+        setConnectionStatus('DISCONNECTED');
+      } else {
+        // App returned to foreground: reconnect immediately
+        reconnect();
+      }
+    });
+
     return () => {
+      appStateSub.remove();
       clearInterval(rateInterval);
       unsubGateway();
       unsubThrottle();
@@ -432,7 +524,7 @@ export function MarketStreamProvider({ children }: { children: ReactNode }) {
         socketRef.current.close();
       }
     };
-  }, [connect, sendCommand, setActivePair]);
+  }, [connect, reconnect, sendCommand, setActivePair]);
 
   const activePayload = payloads[activePair] || null;
 

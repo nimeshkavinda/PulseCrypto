@@ -56,6 +56,7 @@ export const STORAGE_KEYS = {
   ACTIVE_PAIR: 'pulse_active_pair',
   BINARY_COMPRESSION: 'pulse_binary_compression',
   ADAPTIVE_POLLING: 'pulse_adaptive_polling',
+  CACHED_PAYLOADS: 'pulse_cached_payloads',
 } as const;
 
 export const DEFAULT_FAVORITES = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
@@ -133,10 +134,12 @@ export class StorageRepository {
     }
   }
 
-  public set<T>(key: string, value: T): void {
+  public set<T>(key: string, value: T, notify = true): void {
     try {
       this.backend.set(key, JSON.stringify(value));
-      this.notifyStorageChange();
+      if (notify) {
+        this.notifyStorageChange();
+      }
     } catch (err) {
       console.error(`[StorageRepository] Error writing key "${key}":`, err);
     }
@@ -168,12 +171,20 @@ export class StorageRepository {
   }
 
   private notifyStorageChange(): void {
-    for (const listener of this.storageChangeListeners) {
-      try {
-        listener();
-      } catch (err) {
-        console.error('[StorageRepository] Error in storageChange listener:', err);
+    const dispatch = () => {
+      for (const listener of this.storageChangeListeners) {
+        try {
+          listener();
+        } catch (err) {
+          console.error('[StorageRepository] Error in storageChange listener:', err);
+        }
       }
+    };
+
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(dispatch);
+    } else {
+      setTimeout(dispatch, 0);
     }
   }
 
@@ -338,6 +349,15 @@ export class StorageRepository {
 
   public setAdaptivePolling(enabled: boolean): void {
     this.set(STORAGE_KEYS.ADAPTIVE_POLLING, enabled);
+  }
+
+  public getCachedPayloads<T = unknown>(): T | null {
+    return this.get<T>(STORAGE_KEYS.CACHED_PAYLOADS);
+  }
+
+  public setCachedPayloads<T = unknown>(payloads: T): void {
+    // Silent write without notifying settings/telemetry storage stat observers
+    this.set(STORAGE_KEYS.CACHED_PAYLOADS, payloads, false);
   }
 
   public resetDefaults(): void {

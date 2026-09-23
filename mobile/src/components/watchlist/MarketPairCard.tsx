@@ -9,6 +9,7 @@ import { styles } from './MarketPairCard.styles';
 export interface MarketPairCardProps {
   item: PairMetadata;
   isFavorite: boolean;
+  isLive?: boolean;
   onToggleFavorite: (symbol: string) => void;
   onPress: (symbol: string) => void;
 }
@@ -16,6 +17,7 @@ export interface MarketPairCardProps {
 export function MarketPairCard({
   item,
   isFavorite,
+  isLive = true,
   onToggleFavorite,
   onPress,
 }: MarketPairCardProps) {
@@ -30,13 +32,15 @@ export function MarketPairCard({
       accessibilityRole="button"
       accessibilityLabel={`${item.displayName}, price $${item.lastPrice}, 24h change ${changeFormatted}`}
     >
-      {/* Left Column: Asset Info & Live Pill */}
+      {/* Left Column: Asset Info & Live/Synced Pill */}
       <View style={styles.leftColumn}>
         <View style={styles.symbolRow}>
           <Text style={styles.symbolText}>{item.displayName}</Text>
-          <View style={styles.livePill}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
+          <View style={isLive ? styles.livePill : styles.syncedPill}>
+            <View style={isLive ? styles.liveDot : styles.syncedDot} />
+            <Text style={isLive ? styles.liveText : styles.syncedText}>
+              {isLive ? 'LIVE' : 'SYNCED'}
+            </Text>
           </View>
         </View>
 
