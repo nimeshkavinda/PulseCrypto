@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   js.configs.recommended,
@@ -12,6 +13,11 @@ export default tseslint.config(
     },
   },
   {
+    // Rules of Hooks + exhaustive deps (and the compiler-backed purity checks) for the app.
+    files: ['mobile/**/*.{ts,tsx}'],
+    ...reactHooks.configs.flat['recommended-latest'],
+  },
+  {
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
@@ -19,6 +25,8 @@ export default tseslint.config(
       '**/_bmad/**',
       '**/coverage/**',
       '**/.expo/**',
+      'mobile/android/**',
+      'mobile/ios/**',
     ],
   }
 );

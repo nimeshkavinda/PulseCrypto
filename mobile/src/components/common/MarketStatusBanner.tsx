@@ -71,11 +71,16 @@ export function MarketStatusBanner() {
   // A 1 s countdown tick only while waiting to reconnect.
   useEffect(() => {
     if (connection.state !== 'backoff') return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0); // refresh immediately so the countdown starts accurate
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, [connection.state]);
 
-  const content = bannerContent(connection, upstream, lastDataAt, Math.max(now, Date.now()));
+  const content = bannerContent(connection, upstream, lastDataAt, now);
   if (!content) return null;
   const tone = TONE[content.tone];
   return (

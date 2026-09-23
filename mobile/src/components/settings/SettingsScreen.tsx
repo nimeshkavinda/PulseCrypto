@@ -1,5 +1,6 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, PanResponder, LayoutChangeEvent, Alert } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, LayoutChangeEvent, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../../hooks/useSettings';
 import { useAdaptiveActive, useConnection, useUpstream } from '../../data/store/hooks';
@@ -40,37 +41,21 @@ export function SettingsScreen() {
   const displayMs = dragMs ?? preferredMs;
   const thumbPosition = sliderWidth > 0 ? msToRatio(displayMs) * sliderWidth : 0;
 
-  // Refs so the PanResponder (created once) always sees current values.
-  const latest = useRef({ sliderWidth, ratioToMs, setCadence: settings.setCadence, minMs });
-  latest.current = { sliderWidth, ratioToMs, setCadence: settings.setCadence, minMs };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: (evt) => {
-          const { sliderWidth: w, ratioToMs: toMs } = latest.current;
-          if (w > 0) setDragMs(toMs(evt.nativeEvent.locationX / w));
-        },
-        onPanResponderMove: (evt) => {
-          const { sliderWidth: w, ratioToMs: toMs } = latest.current;
-          if (w > 0) setDragMs(toMs(Math.max(0, Math.min(1, evt.nativeEvent.locationX / w))));
-        },
-        onPanResponderRelease: (evt) => {
-          const { sliderWidth: w, ratioToMs: toMs, setCadence, minMs: min } = latest.current;
-          if (w > 0) {
-            const ms = toMs(Math.max(0, Math.min(1, evt.nativeEvent.locationX / w)));
-            // Committed only on release: one cadence request per gesture, not per pixel.
-            setCadence(ms <= min ? null : ms);
-          }
-          setDragMs(null);
-        },
-        onPanResponderTerminate: () => setDragMs(null),
-      }),
-    []
-  );
+  // Slider drag: previews while dragging, commits one cadence request on release.
+  const { setCadence } = settings;
+  const pan = useMemo(() => {
+    const toMs = (x: number) => ratioToMs(Math.max(0, Math.min(1, sliderWidth > 0 ? x / sliderWidth : 0)));
+    return Gesture.Pan()
+      .runOnJS(true)
+      .minDistance(0)
+      .onBegin((e) => setDragMs(toMs(e.x)))
+      .onUpdate((e) => setDragMs(toMs(e.x)))
+      .onEnd((e) => {
+        const ms = toMs(e.x);
+        setCadence(ms <= minMs ? null : ms);
+      })
+      .onFinalize(() => setDragMs(null));
+  }, [sliderWidth, ratioToMs, minMs, setCadence]);
 
   const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -116,9 +101,9 @@ export function SettingsScreen() {
         </View>
 
         <View style={styles.sliderContainer}>
+          <GestureDetector gesture={pan}>
           <View
             style={styles.sliderHitArea}
-            {...panResponder.panHandlers}
             accessibilityRole="adjustable"
             accessibilityLabel="Update frequency"
             accessibilityValue={{ min: minMs, max: MAX_CADENCE_MS, now: displayMs, text: `${displayMs} milliseconds` }}
@@ -128,6 +113,7 @@ export function SettingsScreen() {
               <View style={[styles.thumb, { left: thumbPosition }]} />
             </View>
           </View>
+          </GestureDetector>
           <View style={styles.sliderLabels}>
             <Text style={styles.sliderRangeText}>{minMs}ms</Text>
             <Text style={styles.sliderRangeText}>{Math.round((minMs + MAX_CADENCE_MS) / 2 / step) * step}ms</Text>
