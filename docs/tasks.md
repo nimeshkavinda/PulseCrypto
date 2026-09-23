@@ -77,7 +77,7 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ---
 
 ## Phase 8: Deliverables & Documentation
-- [ ] **T8.1**: Write comprehensive README covering:
+- [x] **T8.1**: Write comprehensive README covering:
   - Setup and build/run instructions (Local and Docker).
   - Architectural decisions & ADRs (In-memory LVC, SVG vs Skia, 3-tier backpressure, client-side throttling vs server FLUSH_INTERVAL_MS, depth chart safety floor).
   - Documented Assumptions (Pro Trader drawer as static chrome, native adaptations of web telemetry labels).
