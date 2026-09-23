@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { PairMetadataSchema } from '@pulsecrypto/shared';
 import { buildApp } from '../src/app.js';
+import { buildMetricsApp } from '../src/http/metrics.routes.js';
+import { loadConfig } from '../src/config.js';
 import { MetadataService } from '../src/metadata.js';
 import { MetricsRegistry } from '../src/metrics.js';
 import { PAIRS, readyMetadata } from './helpers/market.js';
@@ -63,16 +65,52 @@ describe('HTTP routes', () => {
     await app.close();
   });
 
-  it('GET /metrics exposes Prometheus metrics', async () => {
+  it('applies the trimmed ALLOWED_ORIGINS list to HTTP CORS in production', async () => {
+    const config = loadConfig({ NODE_ENV: 'production', ALLOWED_ORIGINS: 'https://a.example, https://b.example' });
+    const app = await buildApp({ enableLogger: false, config });
+    const allowed = await app.inject({ method: 'GET', url: '/health', headers: { origin: 'https://b.example' } });
+    expect(allowed.headers['access-control-allow-origin']).toBe('https://b.example');
+    const denied = await app.inject({ method: 'GET', url: '/health', headers: { origin: 'https://evil.example' } });
+    expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+    await app.close();
+  });
+
+  it('does not expose /metrics on the public app', async () => {
+    const app = await buildApp({ enableLogger: false });
+    const res = await app.inject({ method: 'GET', url: '/metrics' });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('serves Prometheus metrics from the separate metrics app', async () => {
     const metricsRegistry = new MetricsRegistry();
     metricsRegistry.connectedClients.set(4);
     metricsRegistry.wsMessagesReceived.inc({ stream: 'depth20', symbol: 'BTCUSDT' }, 10);
-    const app = await buildApp({ enableLogger: false, metricsRegistry });
+    const app = buildMetricsApp(metricsRegistry);
     const res = await app.inject({ method: 'GET', url: '/metrics' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/plain');
     expect(res.body).toContain('pulsecrypto_connected_clients 4');
     expect(res.body).toContain('pulsecrypto_ws_messages_received_total{stream="depth20",symbol="BTCUSDT"} 10');
+    await app.close();
+  });
+
+  it('GET /ready reflects the injected readiness with reasons', async () => {
+    let state = { ready: false, reasons: ['metadata not loaded', 'upstream connecting'] };
+    const app = await buildApp({ enableLogger: false, readiness: () => state });
+    const notReady = await app.inject({ method: 'GET', url: '/ready' });
+    expect(notReady.statusCode).toBe(503);
+    expect(notReady.json()).toEqual({ ready: false, reasons: ['metadata not loaded', 'upstream connecting'] });
+
+    state = { ready: true, reasons: [] };
+    const ready = await app.inject({ method: 'GET', url: '/ready' });
+    expect(ready.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('GET /ready defaults to metadata readiness', async () => {
+    const app = await buildApp({ enableLogger: false, metadataService: readyMetadata() });
+    expect((await app.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(200);
     await app.close();
   });
 });

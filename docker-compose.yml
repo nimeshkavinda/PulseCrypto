@@ -7,14 +7,13 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+      # Metrics bound to localhost only; in production this port is scraped from the cluster network.
+      - "127.0.0.1:9464:9464"
     environment:
       - PORT=8080
-      - HOST=0.0.0.0
-      - NODE_ENV=production
+      - METRICS_PORT=9464
       - FLUSH_INTERVAL_MS=100
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
+      # Market-data-only hosts, e.g. where the main Binance hosts are restricted:
+      # - BINANCE_WS_URL=wss://data-stream.binance.vision
+      # - BINANCE_REST_URL=https://data-api.binance.vision
+    stop_grace_period: 10s

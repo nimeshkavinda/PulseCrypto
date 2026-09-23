@@ -16,6 +16,18 @@ export const EnvSchema = z.object({
   BINANCE_REST_URL: z.string().url().default('https://api.binance.com'),
   /** A pair whose order book has not updated for this long is reported as stale. */
   STALE_AFTER_MS: z.coerce.number().int().positive().default(3000),
+  /** Largest inbound WebSocket message accepted; larger frames close the socket with 1009. */
+  WS_MAX_PAYLOAD_BYTES: z.coerce.number().int().positive().default(4096),
+  /** Concurrent WebSocket clients per gateway instance; further upgrades get 503 + Retry-After. */
+  WS_MAX_CONNECTIONS: z.coerce.number().int().positive().default(10_000),
+  /** Inbound message token bucket per client: burst size and sustained refill rate. */
+  WS_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(20),
+  WS_RATE_LIMIT_PER_SEC: z.coerce.number().positive().default(10),
+  /** Protocol-level ping interval; a client that misses a pong is terminated. */
+  WS_HEARTBEAT_MS: z.coerce.number().int().positive().default(30_000),
+  /** Prometheus metrics are served on this separate (internal) port, never on the public one. */
+  METRICS_PORT: z.coerce.number().int().positive().default(9464),
+  /** Comma-separated browser origins allowed to open /ws (native apps send no Origin). `*` allows all. */
   ALLOWED_ORIGINS: z.string().default('*'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });

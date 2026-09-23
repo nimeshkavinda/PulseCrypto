@@ -23,8 +23,15 @@ class FakeSocket implements HubSocket {
   terminated = false;
   private handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
 
-  send(data: string): void {
-    this.sent.push(data);
+  pings = 0;
+  send(data: string | Buffer): void {
+    this.sent.push(typeof data === 'string' ? data : data.toString('utf8'));
+  }
+  ping(): void {
+    this.pings++;
+  }
+  pong(): void {
+    this.handlers['pong']?.forEach((fn) => fn());
   }
   close(code?: number, reason?: string): void {
     this.closedWith = { code, reason };
@@ -34,7 +41,7 @@ class FakeSocket implements HubSocket {
     this.readyState = CLOSED;
   }
   on(event: 'message', listener: (data: Buffer) => void): this;
-  on(event: 'close' | 'error', listener: (...args: unknown[]) => void): this;
+  on(event: 'close' | 'error' | 'pong', listener: (...args: unknown[]) => void): this;
   on(event: string, listener: (...args: never[]) => void): this {
     (this.handlers[event] ??= []).push(listener as (...args: unknown[]) => void);
     return this;
@@ -383,6 +390,105 @@ describe('ChannelHub', () => {
     source.status = { version: 2, status: { upstream: 'down', stalePairs: [], since: 5 } };
     hub.tick();
     expect(socket.lastFrame().msgs[0]).toMatchObject({ type: 'status', upstream: 'down' });
+  });
+
+  it('shares one encoded frame across clients with identical pending state', () => {
+    source.setTicker('BTCUSDT', 100);
+    const raw: Array<string | Buffer> = [];
+    const sockets = Array.from({ length: 3 }, () => {
+      const s = subscribed(['tickers']);
+      const orig = s.send.bind(s);
+      s.send = (d: string | Buffer) => {
+        raw.push(d);
+        orig(d);
+      };
+      return s;
+    });
+    hub.tick();
+    expect(raw).toHaveLength(3);
+    expect(raw[0]).toBeInstanceOf(Buffer);
+    expect(raw[1]).toBe(raw[0]);
+    expect(raw[2]).toBe(raw[0]);
+    expect(sockets[0].lastFrame().msgs[0].type).toBe('tickers');
+  });
+
+  it('builds distinct frames for clients whose pending state differs', () => {
+    source.setTicker('BTCUSDT', 100);
+    source.setBook('BTCUSDT');
+    const a = subscribed(['tickers']);
+    const b = subscribed(['tickers', 'book:BTCUSDT']);
+    hub.tick();
+    expect(a.lastFrame().msgs.map((m) => m.type)).toEqual(['tickers']);
+    expect(b.lastFrame().msgs.map((m) => m.type)).toEqual(['tickers', 'book']);
+  });
+
+  describe('connection limits', () => {
+    function limitedHub(extra: Partial<ConstructorParameters<typeof ChannelHub>[0]> = {}) {
+      return new ChannelHub({
+        source, metrics, tickMs: 100, softLimitBytes: SOFT, hardLimitBytes: HARD, lagGraceMs: GRACE, now: () => clock, ...extra,
+      });
+    }
+
+    it('closes a client that floods messages past the burst with 1008', async () => {
+      const h = limitedHub({ rateLimitBurst: 5, rateLimitPerSec: 1 });
+      const socket = new FakeSocket();
+      h.attach(socket);
+      for (let i = 0; i < 6; i++) socket.receive({ type: 'ping', id: i });
+      expect(socket.closedWith).toEqual({ code: 1008, reason: 'rate limit' });
+      expect(h.getConnectedClientCount()).toBe(0);
+      expect(await metrics.getMetrics()).toContain('pulsecrypto_rate_limit_disconnects_total 1');
+    });
+
+    it('never limits normal chatter (ping every 5 s plus occasional subscribes)', () => {
+      const h = limitedHub({ rateLimitBurst: 20, rateLimitPerSec: 10 });
+      const socket = new FakeSocket();
+      h.attach(socket);
+      for (let i = 0; i < 200; i++) {
+        clock += 5000;
+        socket.receive({ type: 'ping', id: i });
+        if (i % 10 === 0) socket.receive({ type: 'subscribe', channels: ['tickers', 'book:BTCUSDT'] });
+      }
+      expect(socket.closedWith).toBeNull();
+    });
+
+    it('refills tokens over time so a paced client stays connected after a burst', () => {
+      const h = limitedHub({ rateLimitBurst: 5, rateLimitPerSec: 10 });
+      const socket = new FakeSocket();
+      h.attach(socket);
+      for (let i = 0; i < 5; i++) socket.receive({ type: 'ping' });
+      clock += 200; // +2 tokens
+      socket.receive({ type: 'ping' });
+      socket.receive({ type: 'ping' });
+      expect(socket.closedWith).toBeNull();
+    });
+
+    it('terminates clients that miss a heartbeat pong and keeps responsive ones', async () => {
+      const h = limitedHub();
+      const healthy = new FakeSocket();
+      const halfOpen = new FakeSocket();
+      h.attach(healthy);
+      h.attach(halfOpen);
+
+      h.heartbeat();
+      expect(healthy.pings).toBe(1);
+      expect(halfOpen.pings).toBe(1);
+      healthy.pong();
+
+      h.heartbeat();
+      expect(halfOpen.terminated).toBe(true);
+      expect(healthy.terminated).toBe(false);
+      expect(healthy.pings).toBe(2);
+      expect(h.getConnectedClientCount()).toBe(1);
+      expect(await metrics.getMetrics()).toContain('pulsecrypto_heartbeat_timeouts_total 1');
+    });
+
+    it('reports capacity against maxConnections', () => {
+      const h = limitedHub({ maxConnections: 2 });
+      h.attach(new FakeSocket());
+      expect(h.hasCapacity()).toBe(true);
+      h.attach(new FakeSocket());
+      expect(h.hasCapacity()).toBe(false);
+    });
   });
 
   it('serializes each changed item once per tick regardless of client count', () => {

@@ -9,6 +9,8 @@ import { InMemoryMarketSource, StatusTracker } from './market/marketSource.js';
 import { createBinanceRestClient } from './market/binanceRest.js';
 import { MetadataBootstrap } from './market/bootstrap.js';
 import { FreshnessMonitor } from './market/freshness.js';
+import { buildMetricsApp } from './http/metrics.routes.js';
+import { Readiness } from './http/health.routes.js';
 import { config } from './config.js';
 
 /** Composition root: upstream ingestion -> market state -> channel hub -> HTTP/WS server. */
@@ -26,9 +28,22 @@ async function main() {
     softLimitBytes: config.WS_SOFT_LIMIT_BYTES,
     hardLimitBytes: config.WS_HARD_LIMIT_BYTES,
     lagGraceMs: config.WS_LAG_GRACE_MS,
+    maxConnections: config.WS_MAX_CONNECTIONS,
+    rateLimitBurst: config.WS_RATE_LIMIT_BURST,
+    rateLimitPerSec: config.WS_RATE_LIMIT_PER_SEC,
+    heartbeatMs: config.WS_HEARTBEAT_MS,
   });
 
-  const server = await buildApp({ enableLogger: true, config, metadataService: metadata, metricsRegistry: metrics, hub });
+  const readiness = (): Readiness => {
+    const reasons: string[] = [];
+    if (!metadata.isReady()) reasons.push('metadata not loaded');
+    const upstream = status.get().status.upstream;
+    if (upstream !== 'live' && upstream !== 'stale') reasons.push(`upstream ${upstream}`);
+    return { ready: reasons.length === 0, reasons };
+  };
+
+  const server = await buildApp({ enableLogger: true, config, metadataService: metadata, metricsRegistry: metrics, hub, readiness });
+  const metricsServer = buildMetricsApp(metrics);
 
   const freshness = new FreshnessMonitor({
     status,
@@ -60,7 +75,7 @@ async function main() {
       freshness.stop();
       bootstrap.stop();
       binance.disconnect();
-      await server.close();
+      await Promise.all([server.close(), metricsServer.close()]);
       process.exit(0);
     } catch (err) {
       server.log.error(err, 'Error during shutdown');
@@ -72,12 +87,18 @@ async function main() {
 
   try {
     await server.listen({ port: config.PORT, host: config.HOST });
+    await metricsServer.listen({ port: config.METRICS_PORT, host: config.HOST });
     bootstrap.start();
     binance.connect();
     freshness.start();
     hub.start();
     server.log.info(
-      { tickMs: config.FLUSH_INTERVAL_MS, ws: `ws://${config.HOST}:${config.PORT}/ws`, upstream: binance.streamUrl.split('?')[0] },
+      {
+        tickMs: config.FLUSH_INTERVAL_MS,
+        ws: `ws://${config.HOST}:${config.PORT}/ws`,
+        metrics: `http://${config.HOST}:${config.METRICS_PORT}/metrics`,
+        upstream: binance.streamUrl.split('?')[0],
+      },
       'PulseCrypto gateway ready'
     );
   } catch (err) {

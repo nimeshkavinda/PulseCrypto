@@ -116,6 +116,17 @@ Per client, on every tick:
 
 Server memory per client is therefore bounded by the hard limit, and a slow client never slows down anyone else. Clients should treat 1013 as "reconnect with backoff".
 
+## Connection limits
+| Limit | Default (env) | Behaviour |
+|---|---|---|
+| Browser origin | `ALLOWED_ORIGINS` = `*` | A request with an `Origin` header not in the allowlist gets **HTTP 403** before the upgrade. Native apps send no `Origin` and are always allowed. |
+| Connections per instance | `WS_MAX_CONNECTIONS` = 10000 | Further upgrades get **HTTP 503** + `Retry-After: 5`. |
+| Inbound message size | `WS_MAX_PAYLOAD_BYTES` = 4096 | Larger messages close the socket with **1009**. |
+| Inbound message rate | `WS_RATE_LIMIT_BURST` = 20, `WS_RATE_LIMIT_PER_SEC` = 10 | Token bucket per client. When empty, the socket closes with **1008 `rate limit`**. A ping every few seconds plus occasional subscribes never comes close. |
+| Liveness | `WS_HEARTBEAT_MS` = 30000 | The server sends a protocol-level ping. A client that hasn't answered by the next heartbeat is terminated. Standard WebSocket clients answer pings automatically. |
+
+Authentication and TLS are expected at the edge (load balancer / API gateway), in front of the gateway.
+
 ## Upstream sources
 | Data | Binance source |
 |---|---|

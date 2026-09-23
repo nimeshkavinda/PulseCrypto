@@ -180,3 +180,77 @@ describe('WebSocket stream (Fastify + ws integration)', () => {
     expect(hub.getConnectedClientCount()).toBe(2);
   });
 });
+
+describe('WebSocket upgrade and connection limits (integration)', () => {
+  let app: FastifyInstance;
+  let hub: ChannelHub;
+  let url: string;
+  const sockets: WebSocket[] = [];
+
+  beforeEach(async () => {
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      ALLOWED_ORIGINS: 'https://app.example, https://admin.example',
+      WS_MAX_CONNECTIONS: '2',
+      WS_MAX_PAYLOAD_BYTES: '1024',
+    });
+    const metrics = new MetricsRegistry();
+    const metadata = new MetadataService();
+    hub = new ChannelHub({
+      source: new InMemoryMarketSource(metadata, new OrderBookManager(), new StatusTracker()),
+      metrics,
+      tickMs: config.FLUSH_INTERVAL_MS,
+      softLimitBytes: config.WS_SOFT_LIMIT_BYTES,
+      hardLimitBytes: config.WS_HARD_LIMIT_BYTES,
+      lagGraceMs: config.WS_LAG_GRACE_MS,
+      maxConnections: config.WS_MAX_CONNECTIONS,
+    });
+    app = await buildApp({ enableLogger: false, config, metadataService: metadata, metricsRegistry: metrics, hub });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const address = app.server.address();
+    url = `ws://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}/ws`;
+  });
+
+  afterEach(async () => {
+    sockets.splice(0).forEach((s) => s.terminate());
+    await app.close();
+  });
+
+  /** Resolves with 'open' or the HTTP status of a rejected upgrade. */
+  function attempt(headers: Record<string, string> = {}): Promise<{ ws: WebSocket; result: 'open' | number }> {
+    const ws = new WebSocket(url, { headers });
+    sockets.push(ws);
+    return new Promise((resolve) => {
+      ws.once('open', () => resolve({ ws, result: 'open' }));
+      ws.once('unexpected-response', (_req, res) => resolve({ ws, result: res.statusCode ?? 0 }));
+      ws.once('error', () => undefined);
+    });
+  }
+
+  it('accepts native clients without an Origin header and allowlisted origins', async () => {
+    expect((await attempt()).result).toBe('open');
+    expect((await attempt({ Origin: 'https://admin.example' })).result).toBe('open');
+  });
+
+  it('rejects foreign browser origins with 403 before upgrading', async () => {
+    expect((await attempt({ Origin: 'https://evil.example' })).result).toBe(403);
+    expect(hub.getConnectedClientCount()).toBe(0);
+  });
+
+  it('answers 503 once at capacity without disturbing connected clients', async () => {
+    const a = await attempt();
+    const b = await attempt();
+    expect([a.result, b.result]).toEqual(['open', 'open']);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await attempt()).result).toBe(503);
+    expect(a.ws.readyState).toBe(WebSocket.OPEN);
+    expect(b.ws.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('closes the socket with 1009 when a message exceeds the payload limit', async () => {
+    const { ws } = await attempt();
+    const closed = new Promise<number>((resolve) => ws.once('close', (code) => resolve(code)));
+    ws.send(JSON.stringify({ type: 'ping', pad: 'x'.repeat(2048) }));
+    expect(await closed).toBe(1009);
+  });
+});

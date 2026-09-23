@@ -99,10 +99,10 @@ _Improvements from end-to-end testing: cut per-client bandwidth, send only what 
 ## Phase 10: Upstream Ingestion Fixes & Gateway Hardening
 - [x] **T10.1**: Upstream stream set of `depth20@100ms` + `aggTrade` + `ticker`, with a configurable `BINANCE_WS_URL` and a clean connector shutdown.
 - [x] **T10.2**: Bootstrap metadata from Binance REST (`ticker/24hr`, `exchangeInfo`) with retry. Send exchange event timestamps, upstream `status` and per-pair staleness to clients.
-- [ ] **T10.3**: Hardening: `maxPayload`, inbound rate limiting, a connection cap, an origin allowlist, a server heartbeat, `/metrics` on an internal port, and separate `/health` and `/ready` endpoints.
+- [x] **T10.3**: Hardening: `maxPayload`, inbound rate limiting, a connection cap, an origin allowlist, a server heartbeat, `/metrics` on an internal port, and separate `/health` and `/ready` endpoints.
 - [x] **T10.4**: `/pairs/meta` with a response schema, `Cache-Control`/ETag, and 503 + `Retry-After` until bootstrap completes.
-- [ ] **T10.5**: A minimal production Docker image and a composition root in `server.ts`.
-- [ ] **T10.6**: A load-test harness (`backend/scripts/loadtest.ts`) with published results.
+- [x] **T10.5**: A minimal production Docker image and a composition root in `server.ts`.
+- [x] **T10.6**: A load-test harness (`backend/scripts/loadtest.ts`) with published results.
 
 ## Phase 11: Mobile Connection Reliability & Render Performance
 - [ ] **T11.1**: `MarketStreamClient`, framework-agnostic: a connection state machine with full-jitter backoff, heartbeat, NetInfo/AppState integration and resubscribe on reconnect.

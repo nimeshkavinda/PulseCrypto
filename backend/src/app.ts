@@ -7,9 +7,8 @@ import { OrderBookManager } from './orderbook.js';
 import { ChannelHub } from './hub/ChannelHub.js';
 import { InMemoryMarketSource, StatusTracker } from './market/marketSource.js';
 import { AppConfig, config as defaultConfig } from './config.js';
-import { healthRoutes } from './http/health.routes.js';
+import { healthRoutes, Readiness } from './http/health.routes.js';
 import { metaRoutes } from './http/meta.routes.js';
-import { metricsRoutes } from './http/metrics.routes.js';
 import { streamRoutes } from './ws/stream.routes.js';
 
 export interface AppOptions {
@@ -18,6 +17,8 @@ export interface AppOptions {
   metadataService?: MetadataService;
   metricsRegistry?: MetricsRegistry;
   hub?: ChannelHub;
+  /** Readiness probe; defaults to "metadata loaded". The composition root adds upstream status. */
+  readiness?: () => Readiness;
 }
 
 /**
@@ -39,7 +40,13 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       softLimitBytes: config.WS_SOFT_LIMIT_BYTES,
       hardLimitBytes: config.WS_HARD_LIMIT_BYTES,
       lagGraceMs: config.WS_LAG_GRACE_MS,
+      maxConnections: config.WS_MAX_CONNECTIONS,
+      rateLimitBurst: config.WS_RATE_LIMIT_BURST,
+      rateLimitPerSec: config.WS_RATE_LIMIT_PER_SEC,
     });
+  const readiness =
+    options.readiness ??
+    (() => (metadata.isReady() ? { ready: true, reasons: [] } : { ready: false, reasons: ['metadata not loaded'] }));
 
   const app = Fastify({
     genReqId: (req) => (req.headers['x-request-id'] as string) || `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -61,18 +68,20 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       : false,
   });
 
+  const allowedOrigins = config.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);
+
   // CORS: open in development for local Android Emulator & Expo dev client.
   await app.register(cors, {
-    origin: isDev ? true : (config.ALLOWED_ORIGINS === '*' ? true : config.ALLOWED_ORIGINS.split(',')),
-    methods: ['GET', 'POST', 'OPTIONS'],
+    origin: isDev || allowedOrigins.includes('*') ? true : allowedOrigins,
+    methods: ['GET', 'OPTIONS'],
   });
 
-  await app.register(websocket);
+  // Inbound client messages are tiny JSON commands; anything larger closes the socket with 1009.
+  await app.register(websocket, { options: { maxPayload: config.WS_MAX_PAYLOAD_BYTES } });
 
-  await app.register(healthRoutes, { hub });
+  await app.register(healthRoutes, { hub, readiness });
   await app.register(metaRoutes, { metadata });
-  await app.register(metricsRoutes, { metrics });
-  await app.register(streamRoutes, { hub });
+  await app.register(streamRoutes, { hub, metrics, allowedOrigins });
 
   return app;
 }

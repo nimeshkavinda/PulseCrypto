@@ -28,6 +28,13 @@ export interface ChannelHubOptions {
   lagGraceMs: number;
   /** Upper bound for client-requested cadence. */
   maxCadenceMs?: number;
+  /** Maximum concurrent clients (checked before the WebSocket upgrade). */
+  maxConnections?: number;
+  /** Inbound token bucket: burst capacity and refill rate per second. */
+  rateLimitBurst?: number;
+  rateLimitPerSec?: number;
+  /** Protocol-level ping interval; clients that miss a pong are terminated. 0 disables. */
+  heartbeatMs?: number;
   now?: () => number;
   logger?: { warn: (obj: unknown, msg?: string) => void };
 }
@@ -40,6 +47,8 @@ interface CachedItem {
 const PAIRS = Object.keys(SUPPORTED_PAIRS) as SupportedPairSymbol[];
 const ERROR_RATE_LIMIT_MS = 1000;
 const TERMINATE_GRACE_MS = 1000;
+/** RFC 6455 policy violation. */
+const CLOSE_POLICY_VIOLATION = 1008;
 
 /**
  * Channel-based fan-out for market data.
@@ -60,14 +69,23 @@ export class ChannelHub {
   private readonly bookCache = new Map<SupportedPairSymbol, CachedItem>();
   private statusCache: CachedItem | null = null;
   private timer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
   private tickCount = 0;
 
   private readonly now: () => number;
   private readonly maxCadenceMs: number;
+  private readonly maxConnections: number;
+  private readonly rateLimitBurst: number;
+  private readonly rateLimitPerSec: number;
+  private readonly heartbeatMs: number;
 
   constructor(private readonly opts: ChannelHubOptions) {
     this.now = opts.now ?? Date.now;
     this.maxCadenceMs = opts.maxCadenceMs ?? 10_000;
+    this.maxConnections = opts.maxConnections ?? Number.POSITIVE_INFINITY;
+    this.rateLimitBurst = opts.rateLimitBurst ?? 20;
+    this.rateLimitPerSec = opts.rateLimitPerSec ?? 10;
+    this.heartbeatMs = opts.heartbeatMs ?? 0;
   }
 
   public get tickMs(): number {
@@ -77,6 +95,10 @@ export class ChannelHub {
   public start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => this.tick(), this.opts.tickMs);
+    if (this.heartbeatMs > 0) {
+      this.heartbeatTimer = setInterval(() => this.heartbeat(), this.heartbeatMs);
+      this.heartbeatTimer.unref?.();
+    }
   }
 
   public stop(): void {
@@ -84,15 +106,50 @@ export class ChannelHub {
       clearInterval(this.timer);
       this.timer = null;
     }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   public getConnectedClientCount(): number {
     return this.sessions.size;
   }
 
+  /** Whether another client may connect (checked before the upgrade). */
+  public hasCapacity(): boolean {
+    return this.sessions.size < this.maxConnections;
+  }
+
+  /**
+   * Terminates clients that did not answer the previous ping, then pings the rest.
+   * Catches half-open TCP connections (e.g. a phone that lost signal) that would otherwise
+   * hold a session until the OS gives up. Public so tests can drive it.
+   */
+  public heartbeat(): void {
+    for (const session of this.sessions) {
+      if (!session.alive) {
+        this.opts.metrics.heartbeatTimeouts.inc();
+        try {
+          session.socket.terminate();
+        } catch {
+          // already gone
+        }
+        this.remove(session);
+        continue;
+      }
+      session.alive = false;
+      try {
+        session.socket.ping();
+      } catch {
+        // the close handler will clean up
+      }
+    }
+  }
+
   /** Registers a socket: sends `hello` + current `status`, then wires inbound handling. */
   public attach(socket: HubSocket): ClientSession {
-    const session = new ClientSession(socket);
+    const session = new ClientSession(socket, this.rateLimitBurst, this.now());
     this.sessions.add(session);
     this.opts.metrics.connectedClients.set(this.sessions.size);
 
@@ -110,6 +167,9 @@ export class ChannelHub {
     this.sendControl(session, [JSON.stringify(hello), status.json]);
 
     socket.on('message', (data) => this.handleMessage(session, data));
+    socket.on('pong', () => {
+      session.alive = true;
+    });
     const cleanup = () => this.remove(session);
     socket.on('close', cleanup);
     socket.on('error', cleanup);
@@ -124,6 +184,12 @@ export class ChannelHub {
     const started = process.hrtime.bigint();
     const now = this.now();
     let lagging = 0;
+    let framesSent = 0;
+    let bytesSent = 0;
+    let framesDropped = 0;
+    // Clients whose pending items are identical this tick (same versions) get the same frame, so
+    // it is assembled and UTF-8 encoded once and the Buffer is shared across their sockets.
+    const frameCache = new Map<string, Buffer>();
 
     // Snapshot versions once per tick (O(pairs)), shared by all sessions.
     const tickerVersions = PAIRS.map((p) => this.opts.source.getTickerVersion(p));
@@ -154,10 +220,12 @@ export class ChannelHub {
 
       const parts: string[] = [];
       const commits: Array<() => void> = [];
+      let signature = '';
 
       if (statusVersion > session.sentStatusVersion) {
         const item = this.statusItem();
         parts.push(item.json);
+        signature += `s${item.version}`;
         commits.push(() => (session.sentStatusVersion = item.version));
       }
 
@@ -170,6 +238,7 @@ export class ChannelHub {
           const item = this.tickerItem(pair);
           if (!item) continue;
           tickerParts.push(item.json);
+          signature += `t${i}.${item.version}`;
           commits.push(() => session.sentTickerVersions.set(pair, item.version));
         }
         if (tickerParts.length > 0) {
@@ -183,6 +252,7 @@ export class ChannelHub {
         const item = this.bookItem(pair);
         if (!item) continue;
         parts.push(item.json);
+        signature += `b${pair}.${item.version}`;
         commits.push(() => session.sentBookVersions.set(pair, item.version));
       }
 
@@ -190,17 +260,27 @@ export class ChannelHub {
 
       if (congested) {
         // Conflate: skip rather than queue. Versions stay uncommitted, so the next frame carries the latest state.
-        this.opts.metrics.framesDropped.inc();
+        framesDropped++;
         continue;
       }
 
-      if (this.sendFrame(session, parts, now)) {
+      let frame = frameCache.get(signature);
+      if (!frame) {
+        frame = Buffer.from(this.assembleFrame(parts, now));
+        frameCache.set(signature, frame);
+      }
+      if (this.write(session, frame)) {
         for (const commit of commits) commit();
         session.lastSentTick = this.tickCount;
+        framesSent++;
+        bytesSent += frame.length;
       }
     }
 
     this.opts.metrics.laggingClients.set(lagging);
+    if (framesSent > 0) this.opts.metrics.framesSent.inc(framesSent);
+    if (bytesSent > 0) this.opts.metrics.bytesSent.inc(bytesSent);
+    if (framesDropped > 0) this.opts.metrics.framesDropped.inc(framesDropped);
     this.opts.metrics.tickDuration.observe(Number(process.hrtime.bigint() - started) / 1e9);
   }
 
@@ -210,6 +290,18 @@ export class ChannelHub {
 
   private handleMessage(session: ClientSession, data: Buffer | ArrayBuffer | Buffer[]): void {
     if (session.closed) return;
+    session.alive = true;
+    if (!this.takeToken(session)) {
+      this.opts.metrics.rateLimitDisconnects.inc();
+      session.closed = true;
+      try {
+        session.socket.close(CLOSE_POLICY_VIOLATION, 'rate limit');
+      } catch {
+        session.socket.terminate();
+      }
+      this.remove(session);
+      return;
+    }
     let raw: unknown;
     try {
       const text = Array.isArray(data)
@@ -227,6 +319,17 @@ export class ChannelHub {
       return;
     }
     this.applyMessage(session, parsed.data);
+  }
+
+  /** Token bucket: refills continuously at `rateLimitPerSec` up to `rateLimitBurst`. */
+  private takeToken(session: ClientSession): boolean {
+    const now = this.now();
+    const elapsed = Math.max(0, now - session.tokensRefilledAt);
+    session.tokens = Math.min(this.rateLimitBurst, session.tokens + (elapsed * this.rateLimitPerSec) / 1000);
+    session.tokensRefilledAt = now;
+    if (session.tokens < 1) return false;
+    session.tokens -= 1;
+    return true;
   }
 
   private applyMessage(session: ClientSession, msg: ClientMessage): void {
@@ -328,16 +431,17 @@ export class ChannelHub {
   // Outbound
   // ---------------------------------------------------------------------------
 
-  private sendFrame(session: ClientSession, parts: string[], now: number): boolean {
-    const frame = `{"v":${PROTOCOL_VERSION},"tick":${this.tickCount},"ts":${now},"msgs":[${parts.join(',')}]}`;
+  private assembleFrame(parts: string[], now: number): string {
+    return `{"v":${PROTOCOL_VERSION},"tick":${this.tickCount},"ts":${now},"msgs":[${parts.join(',')}]}`;
+  }
+
+  private write(session: ClientSession, frame: string | Buffer): boolean {
     if (session.socket.readyState !== WebSocket.OPEN) return false;
     try {
       session.socket.send(frame);
     } catch {
       return false;
     }
-    this.opts.metrics.framesSent.inc();
-    this.opts.metrics.bytesSent.inc(Buffer.byteLength(frame));
     return true;
   }
 
@@ -347,7 +451,11 @@ export class ChannelHub {
       this.closeSlowConsumer(session, 'hard limit');
       return;
     }
-    this.sendFrame(session, parts, this.now());
+    const frame = this.assembleFrame(parts, this.now());
+    if (this.write(session, frame)) {
+      this.opts.metrics.framesSent.inc();
+      this.opts.metrics.bytesSent.inc(Buffer.byteLength(frame));
+    }
   }
 
   private errorJson(session: ClientSession, code: ErrorCode, message: string): string | null {
