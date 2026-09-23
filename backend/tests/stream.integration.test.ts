@@ -13,10 +13,12 @@ import { InMemoryMarketSource, StatusTracker } from '../src/market/marketSource.
 /** Minimal client that records every frame and lets tests await specific messages. */
 class TestClient {
   readonly frames: Frame[] = [];
+  binaryFrames = 0;
   private waiters: Array<() => void> = [];
 
   private constructor(readonly ws: WebSocket) {
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) this.binaryFrames++;
       this.frames.push(FrameSchema.parse(JSON.parse(data.toString())));
       this.waiters.splice(0).forEach((w) => w());
     });
@@ -134,6 +136,9 @@ describe('WebSocket stream (Fastify + ws integration)', () => {
 
     metadata.applyTrade('BTCUSDT', 65001, 3);
     await c.waitFor('tickers', (t) => t.data[0].price === 65001);
+    // Every frame (control and shared data frames) must be a text frame: RN/browser clients
+    // receive binary frames as ArrayBuffer and would drop them.
+    expect(c.binaryFrames).toBe(0);
   });
 
   it('streams only the subscribed order book and stops after unsubscribe', async () => {

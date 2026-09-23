@@ -438,7 +438,9 @@ export class ChannelHub {
   private write(session: ClientSession, frame: string | Buffer): boolean {
     if (session.socket.readyState !== WebSocket.OPEN) return false;
     try {
-      session.socket.send(frame);
+      // Protocol v1 frames are UTF-8 JSON *text* frames. `ws` would send a Buffer as a binary
+      // frame, which browsers and React Native deliver as ArrayBuffer/Blob, not string.
+      session.socket.send(frame, { binary: false });
     } catch {
       return false;
     }

@@ -4,7 +4,7 @@ import { SupportedPairSymbol } from '@pulsecrypto/shared';
 export interface HubSocket {
   readonly readyState: number;
   readonly bufferedAmount: number;
-  send(data: string | Buffer): void;
+  send(data: string | Buffer, options?: { binary?: boolean }): void;
   ping(): void;
   close(code?: number, reason?: string): void;
   terminate(): void;
