@@ -70,6 +70,7 @@ export function SettingsScreen() {
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (evt) => {
           const w = sliderWidthRef.current;
           if (w <= 0) return;
@@ -129,7 +130,11 @@ export function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      scrollEnabled={!isDragging}
+    >
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.screenTitle}>System Settings &amp; Telemetry</Text>
@@ -161,6 +166,7 @@ export function SettingsScreen() {
               ref={trackRef}
               style={styles.track}
               onLayout={handleTrackLayout}
+              pointerEvents="none"
             >
               <View style={[styles.filledTrack, { width: thumbPosition }]} />
               <View style={[styles.thumb, { left: thumbPosition }]} />
@@ -283,12 +289,18 @@ export function SettingsScreen() {
         </View>
 
         <View style={styles.statRow}>
-          <Text style={styles.statLabel}>MMKV Cache Footprint</Text>
-          <Text style={styles.statValue}>{storageStats.estimatedKb} KB utilized</Text>
+          <Text style={styles.statLabel}>Storage Cache Footprint</Text>
+          <Text style={styles.statValue}>
+            {storageStats.isMeasured
+              ? `${storageStats.estimatedKb > 0 ? `${storageStats.estimatedKb} KB` : '<1 KB'} utilized (${storageStats.isNative ? 'MMKV' : 'In-Memory'})`
+              : 'Unavailable'}
+          </Text>
         </View>
         <View style={styles.statRow}>
           <Text style={styles.statLabel}>Active Stored Keys</Text>
-          <Text style={styles.statValue}>{storageStats.keysCount} keys</Text>
+          <Text style={styles.statValue}>
+            {storageStats.isMeasured ? `${storageStats.keysCount} keys` : 'Unavailable'}
+          </Text>
         </View>
 
         <TouchableOpacity

@@ -3,23 +3,53 @@ import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { colors, typography } from '../../theme/tokens';
 
+function readHermesAllocatedMb(): number | null {
+  try {
+    const hermes = (global as unknown as { HermesInternal?: { getAllocatedBytes?: () => number } })?.HermesInternal;
+    const bytes = hermes?.getAllocatedBytes?.();
+    if (typeof bytes === 'number' && !isNaN(bytes) && bytes > 0) {
+      return Number((bytes / (1024 * 1024)).toFixed(1));
+    }
+  } catch {
+    // HermesInternal not present or API unavailable
+  }
+  return null;
+}
+
 export const MemorySparkline = React.memo(function MemorySparkline() {
   const [width, setWidth] = useState<number>(300);
-  const [dataPoints, setDataPoints] = useState<number[]>([
-    138.2, 139.1, 137.8, 140.4, 139.6, 141.2, 140.8, 142.1, 141.5, 143.0, 142.4,
-  ]);
+  const initialMb = readHermesAllocatedMb();
+  const [isSimulated, setIsSimulated] = useState<boolean>(initialMb === null);
+  const [dataPoints, setDataPoints] = useState<number[]>(() => {
+    if (initialMb !== null) {
+      return [initialMb];
+    }
+    // Baseline simulated values when HermesInternal is unavailable
+    return [138.2, 139.1, 137.8, 140.4, 139.6, 141.2, 140.8, 142.1, 141.5, 143.0, 142.4];
+  });
 
   // Track memory updates every 2 seconds
   useEffect(() => {
     const timer = setInterval(() => {
-      setDataPoints((prev) => {
-        // Natural gentle drift around 140-148 MB
-        const last = prev[prev.length - 1] ?? 142.4;
-        const delta = (Math.random() - 0.48) * 1.8;
-        const next = Math.max(132, Math.min(158, Number((last + delta).toFixed(1))));
-        const updated = [...prev.slice(-19), next];
-        return updated;
-      });
+      const realMb = readHermesAllocatedMb();
+      if (realMb !== null) {
+        setIsSimulated(false);
+        setDataPoints((prev) => [...prev.slice(-19), realMb]);
+      } else {
+        // Hermes does not expose a standard JS heap allocation API unless specific
+        // profiling flags are enabled at engine compile time. When
+        // HermesInternal.getAllocatedBytes() is unavailable, the card displays a
+        // "SIMULATED" badge so estimates are never presented as measurements.
+        // In a production app, native heap metrics would be sampled via a native
+        // performance monitoring module (e.g. react-native-performance).
+        setIsSimulated(true);
+        setDataPoints((prev) => {
+          const last = prev[prev.length - 1] ?? 142.4;
+          const delta = (Math.random() - 0.48) * 1.8;
+          const next = Math.max(132, Math.min(158, Number((last + delta).toFixed(1))));
+          return [...prev.slice(-19), next];
+        });
+      }
     }, 2000);
 
     return () => clearInterval(timer);
@@ -78,7 +108,14 @@ export const MemorySparkline = React.memo(function MemorySparkline() {
   return (
     <View style={styles.container} onLayout={handleLayout}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Memory Footprint Tracker</Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>Memory Footprint Tracker</Text>
+          {isSimulated && (
+            <View style={styles.simulatedBadge}>
+              <Text style={styles.simulatedBadgeText}>SIMULATED</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.memoryValue}>{currentMb.toFixed(1)} MB</Text>
       </View>
       <View style={styles.chartWrapper}>
@@ -116,10 +153,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   title: {
     fontFamily: typography.fontFamily.regular,
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  simulatedBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 180, 0, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 180, 0, 0.35)',
+  },
+  simulatedBadgeText: {
+    fontFamily: typography.fontFamily.mono,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#FFB400',
+    letterSpacing: 0.5,
   },
   memoryValue: {
     fontFamily: typography.fontFamily.mono,

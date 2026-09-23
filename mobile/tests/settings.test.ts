@@ -41,6 +41,7 @@ describe('Settings & Storage Repository (Phase 6: Tasks T6.1, T6.3, ADR 4)', () 
       const initialStats = storage.getStorageStats();
       expect(initialStats.keysCount).toBe(0);
       expect(initialStats.estimatedBytes).toBe(0);
+      expect(initialStats.isMeasured).toBe(true);
 
       storage.setFavorites(['BTCUSDT', 'ETHUSDT']);
       storage.setClientThrottle(250);
@@ -48,6 +49,29 @@ describe('Settings & Storage Repository (Phase 6: Tasks T6.1, T6.3, ADR 4)', () 
       const updatedStats = storage.getStorageStats();
       expect(updatedStats.keysCount).toBe(2);
       expect(updatedStats.estimatedBytes).toBeGreaterThan(0);
+      expect(updatedStats.isMeasured).toBe(true);
+    });
+
+    it('should auto-initialize default configuration keys upon instantiation', () => {
+      const freshStorage = new StorageRepository();
+      const stats = freshStorage.getStorageStats();
+      expect(stats.keysCount).toBe(6);
+      expect(stats.isMeasured).toBe(true);
+      expect(stats.estimatedBytes).toBeGreaterThan(0);
+    });
+
+    it('should report isMeasured false and zeros if backend does not support key listing', () => {
+      const restrictedBackend = {
+        getString: () => undefined,
+        set: () => {},
+        delete: () => {},
+        clearAll: () => {},
+      };
+      const unmeasuredStorage = new StorageRepository(restrictedBackend);
+      const stats = unmeasuredStorage.getStorageStats();
+      expect(stats.isMeasured).toBe(false);
+      expect(stats.keysCount).toBe(0);
+      expect(stats.estimatedKb).toBe(0);
     });
 
     it('should reset all settings and preferences back to default on resetDefaults()', () => {

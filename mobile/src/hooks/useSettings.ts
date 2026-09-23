@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { defaultStorage } from '../storage/storageRepository';
+import { defaultStorage, StorageStats } from '../storage/storageRepository';
 
 export interface UseSettingsResult {
   throttleMs: number;
   gatewayUrl: string;
   compressionEnabled: boolean;
   adaptivePollingEnabled: boolean;
-  storageStats: { keysCount: number; estimatedKb: number };
+  storageStats: StorageStats;
   setThrottle: (intervalMs: number) => void;
   setGatewayUrl: (url: string) => void;
   setCompression: (enabled: boolean) => void;

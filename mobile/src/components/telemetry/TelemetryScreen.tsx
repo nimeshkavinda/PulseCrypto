@@ -28,6 +28,14 @@ export function TelemetryScreen() {
   }, [resetMetrics]);
 
   const isHealthy = connectionStatus === 'CONNECTED';
+  const isHermes = (() => {
+    try {
+      const g = global as unknown as { HermesInternal?: unknown };
+      return typeof g?.HermesInternal !== 'undefined' && g?.HermesInternal !== null;
+    } catch {
+      return false;
+    }
+  })();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -99,12 +107,30 @@ export function TelemetryScreen() {
 
       {/* Info Card: GPU / Hermes Acceleration */}
       <View style={styles.infoCard}>
-        <View style={[styles.infoIconBox, { backgroundColor: 'rgba(0, 197, 122, 0.12)' }]}>
-          <Ionicons name="flash" size={20} color={colors.bidGreen} />
+        <View
+          style={[
+            styles.infoIconBox,
+            { backgroundColor: isHermes ? 'rgba(0, 197, 122, 0.12)' : 'rgba(255, 255, 255, 0.08)' },
+          ]}
+        >
+          <Ionicons
+            name="flash"
+            size={20}
+            color={isHermes ? colors.bidGreen : colors.textSecondary}
+          />
         </View>
         <View>
-          <Text style={[styles.infoCategory, { color: colors.bidGreen }]}>GPU ACCELERATION</Text>
-          <Text style={styles.infoTitle}>Hermes / JSI Engine: Active</Text>
+          <Text
+            style={[
+              styles.infoCategory,
+              { color: isHermes ? colors.bidGreen : colors.textSecondary },
+            ]}
+          >
+            {isHermes ? 'GPU ACCELERATION' : 'RUNTIME ENGINE'}
+          </Text>
+          <Text style={styles.infoTitle}>
+            {isHermes ? 'Hermes / JSI Engine: Active' : 'Hermes / JSI Engine: Unavailable'}
+          </Text>
         </View>
       </View>
 
@@ -129,7 +155,9 @@ export function TelemetryScreen() {
         <View>
           <Text style={[styles.infoCategory, { color: colors.textSecondary }]}>STORAGE CACHE</Text>
           <Text style={styles.infoTitle}>
-            MMKV Cache: {storageStats.estimatedKb} KB utilized
+            {storageStats.isMeasured
+              ? `${storageStats.isNative ? 'MMKV Cache' : 'In-Memory Cache'}: ${storageStats.estimatedKb > 0 ? `${storageStats.estimatedKb} KB` : '<1 KB'} utilized`
+              : 'Storage Cache: Unavailable'}
           </Text>
         </View>
       </View>

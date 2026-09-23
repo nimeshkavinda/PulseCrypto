@@ -82,11 +82,45 @@ export const DEFAULT_GATEWAY_URL = getDefaultGatewayUrl();
 
 import { resolveHttpBaseUrl } from '../api/urlUtils';
 
+export interface StorageStats {
+  keysCount: number;
+  estimatedBytes: number;
+  estimatedKb: number;
+  isMeasured: boolean;
+  isNative: boolean;
+}
+
 export class StorageRepository {
   private backend: IStorageBackend;
 
   constructor(customBackend?: IStorageBackend) {
     this.backend = customBackend ?? nativeBackend ?? new InMemoryStorageBackend();
+    this.ensureInitialized();
+  }
+
+  private ensureInitialized(): void {
+    try {
+      if (this.backend.getString(STORAGE_KEYS.FAVORITES) === undefined) {
+        this.backend.set(STORAGE_KEYS.FAVORITES, JSON.stringify(DEFAULT_FAVORITES));
+      }
+      if (this.backend.getString(STORAGE_KEYS.THROTTLE_INTERVAL) === undefined) {
+        this.backend.set(STORAGE_KEYS.THROTTLE_INTERVAL, JSON.stringify(DEFAULT_THROTTLE_MS));
+      }
+      if (this.backend.getString(STORAGE_KEYS.GATEWAY_URL) === undefined) {
+        this.backend.set(STORAGE_KEYS.GATEWAY_URL, JSON.stringify(DEFAULT_GATEWAY_URL));
+      }
+      if (this.backend.getString(STORAGE_KEYS.ACTIVE_PAIR) === undefined) {
+        this.backend.set(STORAGE_KEYS.ACTIVE_PAIR, JSON.stringify('BTCUSDT'));
+      }
+      if (this.backend.getString(STORAGE_KEYS.BINARY_COMPRESSION) === undefined) {
+        this.backend.set(STORAGE_KEYS.BINARY_COMPRESSION, JSON.stringify(true));
+      }
+      if (this.backend.getString(STORAGE_KEYS.ADAPTIVE_POLLING) === undefined) {
+        this.backend.set(STORAGE_KEYS.ADAPTIVE_POLLING, JSON.stringify(false));
+      }
+    } catch {
+      // Backend initialization fallback safe
+    }
   }
 
   public get<T>(key: string): T | null {
@@ -315,24 +349,33 @@ export class StorageRepository {
     this.setActivePair('BTCUSDT');
   }
 
-  public getStorageStats(): { keysCount: number; estimatedBytes: number; estimatedKb: number } {
+  public getStorageStats(): StorageStats {
+    const isNative = nativeBackend !== null && this.backend === nativeBackend;
     if (typeof this.backend.getAllKeys === 'function') {
-      const keys = this.backend.getAllKeys();
-      let totalBytes = 0;
-      for (const k of keys) {
-        const val = this.backend.getString(k);
-        totalBytes += (k.length + (val ? val.length : 0)) * 2;
+      try {
+        const keys = this.backend.getAllKeys();
+        let totalBytes = 0;
+        for (const k of keys) {
+          const val = this.backend.getString(k);
+          totalBytes += (k.length + (val ? val.length : 0)) * 2;
+        }
+        return {
+          keysCount: keys.length,
+          estimatedBytes: totalBytes,
+          estimatedKb: Math.max(1, Math.round(totalBytes / 1024)),
+          isMeasured: true,
+          isNative,
+        };
+      } catch {
+        // Fallback if backend threw
       }
-      return {
-        keysCount: keys.length,
-        estimatedBytes: totalBytes,
-        estimatedKb: Math.max(1, Math.round(totalBytes / 1024)),
-      };
     }
     return {
-      keysCount: 6,
-      estimatedBytes: 42000,
-      estimatedKb: 42,
+      keysCount: 0,
+      estimatedBytes: 0,
+      estimatedKb: 0,
+      isMeasured: false,
+      isNative,
     };
   }
 }
