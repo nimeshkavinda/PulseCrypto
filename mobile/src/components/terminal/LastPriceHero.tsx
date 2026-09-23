@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -8,23 +8,33 @@ import Animated, {
   interpolateColor,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { MarketUpdatePayload, SUPPORTED_PAIRS } from '@pulsecrypto/shared';
+import { Ticker } from '@pulsecrypto/shared';
 import { colors } from '../../theme/tokens';
 import { formatPrice, formatMarketCap } from '../../utils/formatters';
 import { styles } from './LastPriceHero.styles';
-import { PriceDirection } from '../../hooks/useMarketStream';
+
+type PriceDirection = 'up' | 'down' | 'neutral';
 
 interface LastPriceHeroProps {
-  payload: MarketUpdatePayload;
-  priceDirection: PriceDirection;
+  ticker: Ticker;
+  priceDecimals: number;
 }
 
-export const LastPriceHero = React.memo(function LastPriceHero({
-  payload,
-  priceDirection,
-}: LastPriceHeroProps) {
-  const pairInfo = SUPPORTED_PAIRS[payload.pair];
-  const priceDecimals = pairInfo?.priceDecimals ?? 2;
+export const LastPriceHero = React.memo(function LastPriceHero({ ticker, priceDecimals }: LastPriceHeroProps) {
+  const payload = { ...ticker, timestamp: ticker.updatedAt };
+
+  // Direction of the latest price move for this pair (derived state; resets when the pair changes).
+  const [last, setLast] = useState<{ pair: string; price: number; direction: PriceDirection }>({
+    pair: ticker.pair,
+    price: ticker.price,
+    direction: 'neutral',
+  });
+  if (last.pair !== ticker.pair) {
+    setLast({ pair: ticker.pair, price: ticker.price, direction: 'neutral' });
+  } else if (last.price !== ticker.price) {
+    setLast({ pair: ticker.pair, price: ticker.price, direction: ticker.price > last.price ? 'up' : 'down' });
+  }
+  const priceDirection = last.pair === ticker.pair ? last.direction : 'neutral';
 
   const isPositive = payload.change24h >= 0;
   const changeColor = isPositive ? colors.bidGreen : colors.askRed;

@@ -1,27 +1,28 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useMarketConnection } from '../../hooks/useMarketStream';
+import { useConnectionState, useUpstream } from '../../data/store/hooks';
+import { describeStatus, StatusTone } from '../../data/connectionStatus';
 import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
 
-export function HeaderStatusPill() {
-  const { connectionStatus } = useMarketConnection();
-
-  let dotColor: string;
-  let label: string;
-
-  if (connectionStatus === 'CONNECTED') {
-    dotColor = colors.bidGreen;
-    label = 'LIVE';
-  } else if (connectionStatus === 'CONNECTING' || connectionStatus === 'RECONNECTING') {
-    dotColor = '#F59E0B'; // Amber
-    label = 'RECONNECTING';
-  } else {
-    dotColor = colors.askRed;
-    label = 'OFFLINE';
+export function statusColor(tone: StatusTone): string {
+  switch (tone) {
+    case 'live':
+      return colors.bidGreen;
+    case 'warn':
+      return colors.warningYellow;
+    case 'down':
+      return colors.askRed;
+    default:
+      return colors.textMuted;
   }
+}
+
+export function HeaderStatusPill() {
+  const { label, tone } = describeStatus(useConnectionState(), useUpstream());
+  const dotColor = statusColor(tone);
 
   return (
-    <View style={styles.pill} accessibilityLabel={`Gateway status: ${label}`}>
+    <View style={styles.pill} accessibilityLabel={`Market data status: ${label}`}>
       <View style={[styles.dot, { backgroundColor: dotColor }]} />
       <Text style={[styles.text, { color: dotColor }]}>{label}</Text>
     </View>

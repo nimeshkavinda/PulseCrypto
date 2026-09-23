@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { colors } from '../../theme/tokens';
+import { colors, typography, spacing } from '../../theme/tokens';
 
 export const styles = StyleSheet.create({
   container: {
@@ -12,5 +12,11 @@ export const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.border,
+  },
+  placeholder: {
+    color: colors.textSecondary,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.body,
+    padding: spacing.lg,
   },
 });

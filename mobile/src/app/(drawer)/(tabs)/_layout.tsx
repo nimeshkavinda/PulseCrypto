@@ -7,14 +7,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../../../theme/tokens';
 import { styles } from '../../../components/navigation/TabBar.styles';
 
-import { HeaderStatusPill } from '../../../components/navigation/HeaderStatusPill';
-import { useMarketConnection } from '../../../hooks/useMarketStream';
+import { HeaderStatusPill, statusColor } from '../../../components/navigation/HeaderStatusPill';
+import { useActivePair, useConnectionState, useUpstream } from '../../../data/store/hooks';
+import { describeStatus } from '../../../data/connectionStatus';
 import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 
 export default function TabLayout() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { activePair, connectionStatus } = useMarketConnection();
+  const activePair = useActivePair();
+  const status = describeStatus(useConnectionState(), useUpstream());
 
   const pairDisplayName = SUPPORTED_PAIRS[activePair]?.displayName || 'BTC/USDT';
 
@@ -31,9 +33,9 @@ export default function TabLayout() {
     </TouchableOpacity>
   );
 
-  const isConnected = connectionStatus === 'CONNECTED';
-  const statusColor = isConnected ? colors.bidGreen : connectionStatus === 'DISCONNECTED' ? colors.askRed : '#F59E0B';
-  const statusLabel = isConnected ? 'CONNECTED' : connectionStatus;
+  const isConnected = status.tone === 'live';
+  const toneColor = statusColor(status.tone);
+  const statusLabel = status.label;
 
   return (
     <Tabs
@@ -100,13 +102,13 @@ export default function TabLayout() {
                     width: 6,
                     height: 6,
                     borderRadius: 3,
-                    backgroundColor: statusColor,
+                    backgroundColor: toneColor,
                     marginRight: 4,
                   }}
                 />
                 <Text
                   style={{
-                    color: statusColor,
+                    color: toneColor,
                     fontSize: 10,
                     fontFamily: typography.fontFamily.monoBold,
                     letterSpacing: 0.5,
@@ -119,7 +121,7 @@ export default function TabLayout() {
           ),
           headerRight: () => (
             <View style={{ marginRight: 16 }}>
-              <Ionicons name="radio" size={20} color={statusColor} />
+              <Ionicons name="radio" size={20} color={toneColor} />
             </View>
           ),
           tabBarLabel: 'Terminal',

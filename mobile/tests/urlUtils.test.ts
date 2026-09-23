@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { resolveHttpBaseUrl, resolveWsBaseUrl } from '../src/api/urlUtils';
 
 describe('Unified URL Resolution Utilities (Task T5.5)', () => {

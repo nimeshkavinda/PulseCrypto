@@ -1,21 +1,17 @@
 import { useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
+import { SupportedPairSymbolSchema } from '@pulsecrypto/shared';
 import { TerminalScreen } from '../../../components/terminal/TerminalScreen';
-import { useMarketStream } from '../../../hooks/useMarketStream';
-import { SupportedPairSymbol, SupportedPairSymbolSchema } from '@pulsecrypto/shared';
+import { useStreamRuntime } from '../../../data/StreamProvider';
 
 export default function TerminalRoute() {
   const { symbol } = useLocalSearchParams<{ symbol?: string }>();
-  const { setActivePair } = useMarketStream();
+  const runtime = useStreamRuntime();
 
   useEffect(() => {
-    if (symbol) {
-      const parsed = SupportedPairSymbolSchema.safeParse(symbol);
-      if (parsed.success) {
-        setActivePair(parsed.data as SupportedPairSymbol);
-      }
-    }
-  }, [symbol, setActivePair]);
+    const parsed = SupportedPairSymbolSchema.safeParse(symbol);
+    if (parsed.success) runtime.setActivePair(parsed.data);
+  }, [symbol, runtime]);
 
   return <TerminalScreen />;
 }

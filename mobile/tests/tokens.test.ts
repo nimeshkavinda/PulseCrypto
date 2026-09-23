@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { formatMarketCap } from '../src/utils/formatters';
 import { colors, typography, spacing, borderRadius } from '../src/theme/tokens';
 
 describe('Design System Tokens (Task T3.2)', () => {
@@ -40,8 +40,7 @@ describe('Design System Tokens (Task T3.2)', () => {
 });
 
 describe('Financial Formatters', () => {
-  it('should format realistic market caps matching Mockup 3', async () => {
-    const { formatMarketCap } = await import('../src/utils/formatters');
+  it('should format realistic market caps matching Mockup 3', () => {
     expect(formatMarketCap('BTCUSDT', 64238.17)).toBe('1.3T');
     expect(formatMarketCap('BTCUSDT', 86525.22)).toBe('1.7T');
     expect(formatMarketCap('ETHUSDT', 3500)).toBe('421.4B');
