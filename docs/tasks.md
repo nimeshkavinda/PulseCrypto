@@ -85,3 +85,48 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
   - At-scale production discussion (Kubernetes HPA, Redis/NATS fan-out, multi-region).
   - AI-assisted development workflow breakdown.
 - [ ] **T8.2**: Record application demonstration video/screen recording.
+
+---
+
+## Phase 9: Stream Efficiency & Backpressure Improvements
+_Improvements from end-to-end testing: cut per-client bandwidth, send only what changed, handle slow consumers without wasted writes._
+- [ ] **T9.1**: Define the versioned wire protocol in `shared/src/protocol.ts`, covering the frame envelope, the `hello`/`status`/`tickers`/`book`/`ack`/`pong`/`error` messages, and the client `subscribe`/`unsubscribe`/`setCadence`/`ping` messages. Document it in `docs/protocol.md`.
+- [ ] **T9.2**: `ChannelHub` + `ClientSession`. Clients opt in to channels (`tickers`, `book:<PAIR>`). Each changed item is serialized once per tick, and each client gets at most one batched frame per tick.
+- [ ] **T9.3**: Per-client last-value backpressure. Frames are skipped while the socket is congested, and a skipped client later receives the latest state. Sustained lag closes the socket with 1013.
+- [ ] **T9.4**: Keep schema validation at the inbound boundary only, out of the per-tick path.
+- [ ] **T9.5**: Fastify + `ws` integration test suite.
+
+## Phase 10: Upstream Ingestion Fixes & Gateway Hardening
+- [ ] **T10.1**: Upstream stream set of `depth20@100ms` + `aggTrade` + `ticker`, with a configurable `BINANCE_WS_URL` and a clean connector shutdown.
+- [ ] **T10.2**: Bootstrap metadata from Binance REST (`ticker/24hr`, `exchangeInfo`) with retry. Send exchange event timestamps, upstream `status` and per-pair staleness to clients.
+- [ ] **T10.3**: Hardening: `maxPayload`, inbound rate limiting, a connection cap, an origin allowlist, a server heartbeat, `/metrics` on an internal port, and separate `/health` and `/ready` endpoints.
+- [ ] **T10.4**: `/pairs/meta` with a response schema, `Cache-Control`/ETag, and 503 + `Retry-After` until bootstrap completes.
+- [ ] **T10.5**: A minimal production Docker image and a composition root in `server.ts`.
+- [ ] **T10.6**: A load-test harness (`backend/scripts/loadtest.ts`) with published results.
+
+## Phase 11: Mobile Connection Reliability & Render Performance
+- [ ] **T11.1**: `MarketStreamClient`, framework-agnostic: a connection state machine with full-jitter backoff, heartbeat, NetInfo/AppState integration and resubscribe on reconnect.
+- [ ] **T11.2**: An external market store with per-pair selectors and frame-batched commits.
+- [ ] **T11.3**: Gateway configuration precedence: app config, then env, then platform default. User overrides are persisted.
+- [ ] **T11.4**: A jest-expo + React Native Testing Library suite covering the state machine and render isolation.
+
+## Phase 12: Live Watchlist & Terminal Improvements
+- [ ] **T12.1**: Watchlist rows bound to the `tickers` channel, with a per-row price flash and a freshness indicator. REST is used for static metadata and pull-to-refresh.
+- [ ] **T12.2**: The terminal subscribes to `book:<pair>` and shows buy/sell pressure, spread and %, and a last-updated time with a stale badge.
+- [ ] **T12.3**: Order book bars animate with `scaleX` transforms, and the depth chart plots price against cumulative quantity.
+- [ ] **T12.4**: Cold start and offline UX: cached data labelled "last seen", skeletons, and an offline banner.
+
+## Phase 13: Settings Fixes, Native Telemetry & Hardening
+- [ ] **T13.1**: The cadence control drives server `setCadence` and shows the acknowledged value. The gateway editor is available in dev builds only.
+- [ ] **T13.2**: `perf-monitor` Expo Module (Swift + Kotlin) reporting native memory footprint and UI-thread FPS. Telemetry sampling runs only while the screen is focused.
+- [ ] **T13.3**: Dev tooling excluded from release bundles, error boundaries, and cleartext traffic allowed in debug builds only.
+
+## Phase 14: CI, E2E & Performance Evidence
+- [ ] **T14.1**: GitHub Actions running typecheck, lint, tests and the Docker build, plus the React Hooks/React Native lint rules.
+- [ ] **T14.2**: A Maestro E2E flow covering search, favourite, relaunch, terminal, offline and reconnect.
+- [ ] **T14.3**: Android frame-stats capture under a sustained burst, and the gateway load-test results.
+
+## Phase 15: Documentation Updates & Deliverables
+- [ ] **T15.1**: Update the README to match the final implementation: architecture, protocol, buffering strategy, ADRs, scaling analysis, assumptions, trade-offs and AI workflow.
+- [ ] **T15.2**: Repository default branch and a fresh-clone verification.
+- [ ] **T15.3**: Screen recording (T8.2).
