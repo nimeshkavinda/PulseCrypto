@@ -23,6 +23,8 @@ export interface MarketState {
   activePair: SupportedPairSymbol;
   /** When the cached snapshot shown at cold start was saved (null if none was loaded). */
   cachedAt: number | null;
+  /** True while adaptive mode is slowing the stream because the connection is metered. */
+  adaptiveActive: boolean;
 }
 
 export type MarketStore = StoreApi<MarketState>;
@@ -48,6 +50,7 @@ export function createMarketStore(initial: Partial<MarketState> = {}): MarketSto
     connection: INITIAL_CONNECTION,
     activePair: 'BTCUSDT',
     cachedAt: null,
+    adaptiveActive: false,
     ...initial,
   }));
 }

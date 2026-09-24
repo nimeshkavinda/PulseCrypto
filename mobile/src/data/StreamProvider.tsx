@@ -1,6 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { StreamRuntime } from './StreamRuntime';
-import { nativeStreamDeps } from './stream/platform';
+import { nativeStreamDeps, subscribeNetworkCost } from './stream/platform';
 import { currentGatewayConfig } from '../config/gateway';
 import { defaultStorage } from '../storage/storageRepository';
 
@@ -11,6 +11,7 @@ function createDefaultRuntime(): StreamRuntime {
     storage: defaultStorage,
     deps: nativeStreamDeps,
     resolveUrl: () => currentGatewayConfig().wsUrl,
+    subscribeNetworkCost,
   });
 }
 

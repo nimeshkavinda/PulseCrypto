@@ -1,0 +1,9 @@
+{
+  "name": "perf-monitor",
+  "version": "1.0.0",
+  "description": "PulseCrypto native performance probes: process memory footprint and UI-thread frame rate",
+  "main": "index.ts",
+  "license": "MIT",
+  "author": "Nimesh Kavinda",
+  "homepage": "https://github.com/nimeshkavinda/PulseCrypto"
+}

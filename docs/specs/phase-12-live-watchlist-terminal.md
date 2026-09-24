@@ -5,7 +5,7 @@ created: '2026-09-23'
 status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
-baseline_commit: '3cc17820ae273a3612b27beb2deb343562e3cae9'
+baseline_commit: '315c158a6c99eef75259d7ec68ff678347c77316'
 context:
   - '{project-root}/docs/protocol.md'
 ---

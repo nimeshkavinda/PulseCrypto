@@ -5,12 +5,10 @@ export interface UseSettingsResult {
   /** User-preferred cadence in ms, or null for the gateway default. */
   cadenceMs: number | null;
   gatewayOverride: string | null;
-  compressionEnabled: boolean;
   adaptivePollingEnabled: boolean;
   storageStats: StorageStats;
   setCadence: (ms: number | null) => void;
   setGatewayOverride: (url: string | null) => void;
-  setCompression: (enabled: boolean) => void;
   setAdaptivePolling: (enabled: boolean) => void;
   resetDefaults: () => void;
 }
@@ -18,7 +16,6 @@ export interface UseSettingsResult {
 const read = () => ({
   cadenceMs: defaultStorage.getCadenceMs(),
   gatewayOverride: defaultStorage.getGatewayOverride(),
-  compressionEnabled: defaultStorage.getBinaryCompression(),
   adaptivePollingEnabled: defaultStorage.getAdaptivePolling(),
   storageStats: defaultStorage.getStorageStats(),
 });
@@ -40,7 +37,6 @@ export function useSettings(): UseSettingsResult {
     ...state,
     setCadence: useCallback((ms: number | null) => defaultStorage.setCadenceMs(ms), []),
     setGatewayOverride: useCallback((url: string | null) => defaultStorage.setGatewayOverride(url), []),
-    setCompression: useCallback((enabled: boolean) => defaultStorage.setBinaryCompression(enabled), []),
     setAdaptivePolling: useCallback((enabled: boolean) => defaultStorage.setAdaptivePolling(enabled), []),
     resetDefaults: useCallback(() => defaultStorage.resetDefaults(), []),
   };

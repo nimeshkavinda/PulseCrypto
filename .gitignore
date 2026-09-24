@@ -11,10 +11,10 @@ dist/
 build/
 .expo/
 web-build/
-android/
-ios/
+# Generated native projects (expo prebuild). Local Expo Modules keep their ios/ and android/ sources.
 mobile/android/
 mobile/ios/
+.cxx/
 
 # Environment files
 .env

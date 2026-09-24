@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PerfMonitorModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.perfmonitor.PerfMonitorModule"]
+  }
+}

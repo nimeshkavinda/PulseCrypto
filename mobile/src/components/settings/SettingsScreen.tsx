@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, PanResponder, LayoutChangeEvent, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../../hooks/useSettings';
-import { useConnection, useUpstream } from '../../data/store/hooks';
+import { useAdaptiveActive, useConnection, useUpstream } from '../../data/store/hooks';
+import { ADAPTIVE_METERED_CADENCE_MS } from '../../data/adaptiveCadence';
 import { useStreamRuntime } from '../../data/StreamProvider';
 import { describeStatus } from '../../data/connectionStatus';
 import { currentGatewayConfig } from '../../config/gateway';
@@ -19,6 +20,7 @@ export function SettingsScreen() {
   const connection = useConnection();
   const upstream = useUpstream();
   const runtime = useStreamRuntime();
+  const adaptiveActive = useAdaptiveActive();
   const status = describeStatus(connection.state, upstream);
 
   // The gateway advertises its tick (the fastest cadence) in `hello`; 100 ms until known.
@@ -154,21 +156,20 @@ export function SettingsScreen() {
         <View style={styles.divider} />
 
         <View style={styles.toggleRow}>
-          <Text style={styles.toggleLabel}>Binary Protocol Compression</Text>
-          <Switch
-            value={settings.compressionEnabled}
-            onValueChange={settings.setCompression}
-            trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: colors.bidGreen }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-        <View style={styles.toggleRow}>
-          <Text style={styles.toggleLabel}>Adaptive Polling Strategy</Text>
+          <View style={styles.toggleTextColumn}>
+            <Text style={styles.toggleLabel}>Adaptive Polling Strategy</Text>
+            <Text style={styles.toggleHint}>
+              {adaptiveActive
+                ? `Active: metered connection, updates slowed to ${ADAPTIVE_METERED_CADENCE_MS}ms`
+                : `Slows updates to ${ADAPTIVE_METERED_CADENCE_MS}ms on cellular or metered connections`}
+            </Text>
+          </View>
           <Switch
             value={settings.adaptivePollingEnabled}
             onValueChange={settings.setAdaptivePolling}
             trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: colors.bidGreen }}
             thumbColor="#FFFFFF"
+            accessibilityLabel="Adaptive polling strategy"
           />
         </View>
       </View>

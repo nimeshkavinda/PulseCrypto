@@ -15,3 +15,4 @@ export const useConnectionState = () => useMarket((s) => s.connection.state);
 export const useConnection = () => useMarket((s) => s.connection);
 export const useUpstream = () => useMarket((s) => s.upstream);
 export const useCachedAt = () => useMarket((s) => s.cachedAt);
+export const useAdaptiveActive = () => useMarket((s) => s.adaptiveActive);

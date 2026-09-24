@@ -19,3 +19,4 @@ Each spec records:
 | 10b | [Gateway hardening, lean image and load-test evidence](./phase-10b-gateway-hardening.md) | done |
 | 11 | [Mobile connection reliability and render performance](./phase-11-mobile-data-layer.md) | done |
 | 12 | [Live watchlist and terminal improvements](./phase-12-live-watchlist-terminal.md) | done |
+| 13 | [Settings fixes, native telemetry and hardening](./phase-13-settings-native-telemetry.md) | done |
