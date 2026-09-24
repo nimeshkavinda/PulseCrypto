@@ -111,10 +111,10 @@ _Improvements from end-to-end testing: cut per-client bandwidth, send only what 
 - [x] **T11.4**: A jest-expo + React Native Testing Library suite covering the state machine and render isolation.
 
 ## Phase 12: Live Watchlist & Terminal Improvements
-- [ ] **T12.1**: Watchlist rows bound to the `tickers` channel, with a per-row price flash and a freshness indicator. REST is used for static metadata and pull-to-refresh.
-- [ ] **T12.2**: The terminal subscribes to `book:<pair>` and shows buy/sell pressure, spread and %, and a last-updated time with a stale badge.
-- [ ] **T12.3**: Order book bars animate with `scaleX` transforms, and the depth chart plots price against cumulative quantity.
-- [ ] **T12.4**: Cold start and offline UX: cached data labelled "last seen", skeletons, and an offline banner.
+- [x] **T12.1**: Watchlist rows bound to the `tickers` channel, with a per-row price flash and a freshness indicator. REST is used for static metadata and pull-to-refresh.
+- [x] **T12.2**: The terminal subscribes to `book:<pair>` and shows buy/sell pressure, spread and %, and a last-updated time with a stale badge.
+- [x] **T12.3**: Order book bars animate with `scaleX` transforms, and the depth chart plots price against cumulative quantity.
+- [x] **T12.4**: Cold start and offline UX: cached data labelled "last seen", skeletons, and an offline banner.
 
 ## Phase 13: Settings Fixes, Native Telemetry & Hardening
 - [ ] **T13.1**: The cadence control drives server `setCadence` and shows the acknowledged value. The gateway editor is available in dev builds only.

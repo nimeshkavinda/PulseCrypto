@@ -1,4 +1,4 @@
-import { PairMetadata } from '@pulsecrypto/shared';
+import { PairMetadata, SUPPORTED_PAIRS, SupportedPairSymbol } from '@pulsecrypto/shared';
 
 export type MarketFilterTab = 'ALL' | 'FAVORITES' | 'GAINERS' | 'LOSERS';
 
@@ -9,47 +9,69 @@ export const FILTER_TABS: { id: MarketFilterTab; label: string }[] = [
   { id: 'LOSERS', label: 'Losers' },
 ];
 
-/**
- * Filter and sort pairs by real-time search query and active tab filter.
- */
-export function filterAndSortPairs(
-  pairs: PairMetadata[],
-  searchQuery: string,
-  filterTab: MarketFilterTab,
-  favorites: string[]
-): PairMetadata[] {
-  const query = searchQuery.trim().toLowerCase();
+/** One watchlist row: static pair info, enriched with exchange metadata when it has loaded. */
+export interface WatchRow {
+  symbol: SupportedPairSymbol;
+  displayName: string;
+  baseAsset: string;
+  priceDecimals: number;
+  tradingStatus: PairMetadata['tradingStatus'] | null;
+  /** Values from GET /pairs/meta, shown until the first live ticker arrives. */
+  snapshot: Pick<PairMetadata, 'lastPrice' | 'change24h' | 'high24h' | 'low24h' | 'volume24h'> | null;
+}
 
-  // 1. Filter by search query (symbol, display name, or base asset)
-  let result = pairs.filter((item) => {
-    if (!query) return true;
-    return (
-      item.symbol.toLowerCase().includes(query) ||
-      item.displayName.toLowerCase().includes(query) ||
-      item.baseAsset.toLowerCase().includes(query)
-    );
+/** Rows for every supported pair; works without metadata (e.g. REST unavailable). */
+export function buildRows(metadata: PairMetadata[] | undefined): WatchRow[] {
+  const bySymbol = new Map((metadata ?? []).map((m) => [m.symbol, m]));
+  return (Object.keys(SUPPORTED_PAIRS) as SupportedPairSymbol[]).map((symbol) => {
+    const base = SUPPORTED_PAIRS[symbol];
+    const meta = bySymbol.get(symbol);
+    return {
+      symbol,
+      displayName: meta?.displayName ?? base.displayName,
+      baseAsset: meta?.baseAsset ?? base.baseAsset,
+      priceDecimals: meta?.priceDecimals ?? base.priceDecimals,
+      tradingStatus: meta?.tradingStatus ?? null,
+      snapshot: meta
+        ? { lastPrice: meta.lastPrice, change24h: meta.change24h, high24h: meta.high24h, low24h: meta.low24h, volume24h: meta.volume24h }
+        : null,
+    };
   });
+}
 
-  // 2. Filter & Sort by active tab
-  switch (filterTab) {
+/** Case-insensitive match on symbol, display name or base asset ("btc" → BTC / USDT). */
+export function matchesQuery(row: Pick<WatchRow, 'symbol' | 'displayName' | 'baseAsset'>, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    row.symbol.toLowerCase().includes(q) ||
+    row.displayName.toLowerCase().includes(q) ||
+    row.baseAsset.toLowerCase().includes(q)
+  );
+}
+
+/**
+ * Applies the tab to already query-filtered symbols. Gainers/losers use the live 24h change when
+ * available (`changeOf` returns undefined for pairs with no data, which are then excluded).
+ */
+export function applyTab(
+  symbols: SupportedPairSymbol[],
+  tab: MarketFilterTab,
+  favorites: SupportedPairSymbol[],
+  changeOf: (s: SupportedPairSymbol) => number | undefined
+): SupportedPairSymbol[] {
+  switch (tab) {
     case 'FAVORITES':
-      result = result.filter((item) => favorites.includes(item.symbol));
-      break;
+      return symbols.filter((s) => favorites.includes(s));
     case 'GAINERS':
-      result = result
-        .filter((item) => item.change24h >= 0)
-        .sort((a, b) => b.change24h - a.change24h);
-      break;
+      return symbols
+        .filter((s) => (changeOf(s) ?? -Infinity) >= 0)
+        .sort((a, b) => changeOf(b)! - changeOf(a)!);
     case 'LOSERS':
-      result = result
-        .filter((item) => item.change24h < 0)
-        .sort((a, b) => a.change24h - b.change24h);
-      break;
-    case 'ALL':
+      return symbols
+        .filter((s) => (changeOf(s) ?? Infinity) < 0)
+        .sort((a, b) => changeOf(a)! - changeOf(b)!);
     default:
-      // Keep natural order
-      break;
+      return symbols;
   }
-
-  return result;
 }
