@@ -5,6 +5,8 @@ describe('describeStatus', () => {
     expect(describeStatus('open', { status: 'live', stalePairs: [], since: 1 })).toEqual({ label: 'LIVE', tone: 'live' });
     expect(describeStatus('open', { status: 'stale', stalePairs: ['BTCUSDT'], since: 1 }).label).toBe('DELAYED');
     expect(describeStatus('open', { status: 'down', stalePairs: [], since: 1 }).label).toBe('NO FEED');
+    // Gateway warming up (still reaching the exchange) is not a missing feed.
+    expect(describeStatus('open', { status: 'connecting', stalePairs: [], since: 1 })).toEqual({ label: 'CONNECTING', tone: 'warn' });
   });
 
   it('describes each non-open socket state', () => {

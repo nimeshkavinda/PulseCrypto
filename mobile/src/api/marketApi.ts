@@ -27,8 +27,10 @@ export async function fetchPairsMetadata(httpBaseUrl: string, timeoutMs = 5000):
       signal: controller.signal,
     });
     if (response.status === 503) {
-      const retry = Number(response.headers.get('Retry-After'));
-      throw new MetadataUnavailableError('Market metadata is still loading', Number.isFinite(retry) ? retry : null);
+      // A missing or empty header means "unknown" (null), not "retry immediately" (Number(null) is 0).
+      const header = response.headers.get('Retry-After')?.trim();
+      const retry = header ? Number(header) : NaN;
+      throw new MetadataUnavailableError('Market metadata is still loading', Number.isFinite(retry) && retry >= 0 ? retry : null);
     }
     if (!response.ok) throw new Error(`GET /pairs/meta failed: HTTP ${response.status}`);
     return PairsMetadataArraySchema.parse(await response.json());

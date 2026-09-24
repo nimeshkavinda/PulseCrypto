@@ -33,7 +33,13 @@ private class FrameCounter : Choreographer.FrameCallback {
 
   override fun doFrame(frameTimeNanos: Long) {
     if (!running) return
-    if (windowStartNanos == 0L) windowStartNanos = frameTimeNanos
+    Choreographer.getInstance().postFrameCallback(this)
+    if (windowStartNanos == 0L) {
+      // The first callback only opens the window: counting it too gave N + 1 frames per N
+      // intervals (61 FPS on a 60 Hz display in the first window).
+      windowStartNanos = frameTimeNanos
+      return
+    }
     frames++
     val elapsed = frameTimeNanos - windowStartNanos
     if (elapsed >= 1_000_000_000L) {
@@ -41,7 +47,6 @@ private class FrameCounter : Choreographer.FrameCallback {
       frames = 0
       windowStartNanos = frameTimeNanos
     }
-    Choreographer.getInstance().postFrameCallback(this)
   }
 }
 

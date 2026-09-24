@@ -34,7 +34,39 @@ describe('MarketPairCard (live row)', () => {
     await render(t.wrap(<MarketPairCard row={eth} isFavorite={false} onPress={noop} onToggleFavorite={noop} />));
     expect(screen.getByText('$2,742.02')).toBeTruthy();
     expect(screen.getByText('▼ 0.41%')).toBeTruthy();
+    // REST values with the socket not open: the row is OFFLINE, not "loading".
+    expect(screen.getByText('OFFLINE')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /ETH \/ USDT, \$2,742\.02, .*offline/ })).toBeTruthy();
+
+    // Socket open, still waiting for the first stream ticker.
+    await act(async () => t.goLive());
     expect(screen.getByText('SYNCING')).toBeTruthy();
+  });
+
+  it('does not flash when the first live ticker replaces a REST value', async () => {
+    const reanimated = jest.requireMock('react-native-reanimated') as { withSequence: (...a: unknown[]) => unknown };
+    const flash = jest.spyOn(reanimated, 'withSequence');
+    const t = createTestRuntime();
+    const [eth] = buildRows([
+      { symbol: 'ETHUSDT', displayName: 'ETH / USDT', baseAsset: 'ETH', quoteAsset: 'USDT', tradingStatus: 'TRADING', priceDecimals: 2, qtyDecimals: 4, high24h: 2800, low24h: 2700, volume24h: 1000, lastPrice: 2742.02, change24h: -0.41 },
+    ]).filter((r) => r.symbol === 'ETHUSDT');
+    await render(t.wrap(<MarketPairCard row={eth} isFavorite={false} onPress={noop} onToggleFavorite={noop} />));
+
+    await act(async () => {
+      t.goLive();
+      t.runtime.ingestor.ingest([{ type: 'tickers', data: [ticker('ETHUSDT', 2800, Date.now())] }]);
+      t.flush();
+    });
+    expect(screen.getByText('$2,800.00')).toBeTruthy();
+    expect(flash).not.toHaveBeenCalled();
+
+    // A real move on the live stream does flash.
+    await act(async () => {
+      t.runtime.ingestor.ingest([{ type: 'tickers', data: [ticker('ETHUSDT', 2801, Date.now())] }]);
+      t.flush();
+    });
+    expect(flash).toHaveBeenCalledTimes(1);
+    flash.mockRestore();
   });
 
   it('marks a pair DELAYED when the gateway reports it stale, leaving other pairs LIVE', async () => {

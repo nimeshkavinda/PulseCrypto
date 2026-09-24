@@ -10,6 +10,8 @@ import { colors, typography, spacing } from '../../theme/tokens';
 export interface BannerContent {
   tone: 'warn' | 'down' | 'info';
   text: string;
+  /** What screen readers get: `text` without the per-second countdown. */
+  announcement: string;
 }
 
 /**
@@ -22,26 +24,33 @@ export function bannerContent(
   lastDataAt: number | null,
   now: number
 ): BannerContent | null {
-  const since = lastDataAt ? ` Showing prices from ${formatTimeOfDay(lastDataAt)}.` : '';
+  const shownAt = lastDataAt ? formatTimeOfDay(lastDataAt) : null;
+  const since = shownAt ? ` Showing prices from ${shownAt}.` : '';
+  const plain = (tone: BannerContent['tone'], text: string): BannerContent => ({ tone, text, announcement: text });
   switch (connection.state) {
     case 'offline':
-      return { tone: 'down', text: `You're offline.${since || ' Showing the last prices received.'}` };
+      // With nothing received there are no prices on screen to talk about.
+      return plain('down', `You're offline.${since}`);
     case 'backoff': {
       const secs = connection.nextRetryAt ? Math.max(0, Math.ceil((connection.nextRetryAt - now) / 1000)) : 0;
-      return { tone: 'warn', text: `Connection lost. Reconnecting${secs > 0 ? ` in ${secs}s` : '…'}` };
+      const tail = shownAt ? ` · showing prices from ${shownAt}` : '';
+      return {
+        tone: 'warn',
+        text: `Connection lost. Reconnecting${secs > 0 ? ` in ${secs}s` : '…'}${tail}`,
+        announcement: `Connection lost. Reconnecting${tail}`,
+      };
     }
     case 'connecting':
     case 'idle':
-      return lastDataAt ? { tone: 'info', text: `Connecting…${since}` } : null;
+      return lastDataAt ? plain('info', `Connecting…${since}`) : null;
     case 'paused':
       return null;
     case 'open':
-      if (upstream && (upstream.status === 'down' || upstream.status === 'connecting')) {
-        return { tone: 'down', text: 'Exchange feed unavailable. Prices may be out of date.' };
-      }
+      if (upstream?.status === 'connecting') return plain('info', 'Connecting to the exchange feed…');
+      if (upstream?.status === 'down') return plain('down', 'Exchange feed unavailable. Prices may be out of date.');
       if (upstream && upstream.status === 'stale' && upstream.stalePairs.length > 0) {
         const names = upstream.stalePairs.map((p) => SUPPORTED_PAIRS[p].baseAsset).join(', ');
-        return { tone: 'warn', text: `Delayed: ${names}` };
+        return plain('warn', `Delayed: ${names}`);
       }
       return null;
   }
@@ -85,7 +94,9 @@ export function MarketStatusBanner() {
   const tone = TONE[content.tone];
   return (
     <View style={[styles.banner, { backgroundColor: tone.bg }]} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Text style={[styles.text, { color: tone.fg }]}>{content.text}</Text>
+      <Text style={[styles.text, { color: tone.fg }]} accessibilityLabel={content.announcement}>
+        {content.text}
+      </Text>
     </View>
   );
 }

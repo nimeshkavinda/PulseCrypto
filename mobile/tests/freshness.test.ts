@@ -27,6 +27,21 @@ describe('pairFreshness', () => {
     expect(pairFreshness({ ...base, upstream: { status: 'stale', stalePairs: ['ETHUSDT'], since: 1 } })).toBe('live');
   });
 
+  it('judges age by the local receive time, so a device clock 10 s ahead still shows LIVE', () => {
+    const gatewayUpdatedAt = now - 10_000 - 100; // gateway clock is 10 s behind this device
+    expect(pairFreshness({ ...base, updatedAt: gatewayUpdatedAt, receivedAt: now - 100 })).toBe('live');
+    expect(pairFreshness({ ...base, updatedAt: gatewayUpdatedAt, receivedAt: now - STALE_AFTER_MS - 1 })).toBe('delayed');
+  });
+
+  it('treats REST values as data: OFFLINE while disconnected, syncing (none) once connected', () => {
+    const rest = { ...base, origin: 'rest' as const, updatedAt: undefined };
+    for (const connection of ['connecting', 'backoff', 'offline', 'idle'] as const) {
+      expect(pairFreshness({ ...rest, connection })).toBe('offline');
+    }
+    expect(pairFreshness(rest)).toBe('none');
+    expect(pairFreshness({ ...rest, origin: undefined })).toBe('none');
+  });
+
   it('is delayed when the exchange feed is down or data is older than the threshold', () => {
     expect(pairFreshness({ ...base, upstream: { status: 'down', stalePairs: [], since: 1 } })).toBe('delayed');
     expect(pairFreshness({ ...base, updatedAt: now - STALE_AFTER_MS - 1 })).toBe('delayed');

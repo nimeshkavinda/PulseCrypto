@@ -1,6 +1,6 @@
 import React, { ReactNode, useEffect, useState } from 'react';
 import { StyleProp, StyleSheet, ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { colors } from '../../theme/tokens';
 
 export type PriceDirection = 'up' | 'down' | 'neutral';
@@ -30,11 +30,19 @@ export function usePriceDirection(key: string, price: number | undefined): { dir
   return s.key === key ? { direction: s.direction, seq: s.seq } : { direction: 'neutral', seq: 0 };
 }
 
+/**
+ * The key the flash direction is tracked under. Including the value's source means the first live
+ * tick after a REST or cached value resets (no flash): the change is a data-source switch, not a move.
+ */
+export const flashKeyFor = (key: string, source?: string) => (source ? `${key}|${source}` : key);
+
 export const FLASH_UP = 'rgba(0, 197, 122, 0.28)';
 export const FLASH_DOWN = 'rgba(255, 59, 105, 0.28)';
 
 interface PriceFlashProps {
   flashKey: string;
+  /** Where the price came from (`rest`, `cache`, `live`); a change resets without flashing. */
+  source?: string;
   price: number | undefined;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
@@ -45,14 +53,20 @@ interface PriceFlashProps {
  * Animates only the opacity of a single-colour overlay, so there is no layout work and no
  * cross-fade through the opposite colour.
  */
-export const PriceFlash = React.memo(function PriceFlash({ flashKey, price, style, children }: PriceFlashProps) {
-  const { direction, seq } = usePriceDirection(flashKey, price);
+export const PriceFlash = React.memo(function PriceFlash({ flashKey, source, price, style, children }: PriceFlashProps) {
+  const key = flashKeyFor(flashKey, source);
+  const { direction, seq } = usePriceDirection(key, price);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    if (seq === 0) return;
+    if (seq === 0) {
+      // A reset (recycled cell, pair switch, source switch) cancels a flash still running.
+      cancelAnimation(opacity);
+      opacity.value = 0;
+      return;
+    }
     opacity.value = withSequence(withTiming(1, { duration: 90 }), withTiming(0, { duration: 520 }));
-  }, [seq, opacity]);
+  }, [key, seq, opacity]);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 

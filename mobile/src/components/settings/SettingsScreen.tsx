@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, LayoutChangeEvent, Alert } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, LayoutChangeEvent, Alert, AccessibilityActionEvent } from 'react-native';
+import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../../hooks/useSettings';
 import { useAdaptiveActive, useConnection, useUpstream } from '../../data/store/hooks';
@@ -8,7 +9,6 @@ import { ADAPTIVE_METERED_CADENCE_MS } from '../../data/adaptiveCadence';
 import { useStreamRuntime } from '../../data/StreamProvider';
 import { describeStatus } from '../../data/connectionStatus';
 import { currentGatewayConfig } from '../../config/gateway';
-import { defaultStorage, STORAGE_KEYS } from '../../storage/storageRepository';
 import { colors } from '../../theme/tokens';
 import { STORAGE_ENGINE_LABEL } from '../../storage/engineLabel';
 import { styles } from './SettingsScreen.styles';
@@ -16,13 +16,17 @@ import { styles } from './SettingsScreen.styles';
 const MAX_CADENCE_MS = 1000;
 const PRESETS = [100, 250, 500, 1000];
 
+/** "1,234 bytes": the exact stored size, not a rounded KB figure. */
+const formatBytes = (n: number) => `${n.toLocaleString('en-US')} bytes`;
+
 export function SettingsScreen() {
-  const settings = useSettings();
+  const runtime = useStreamRuntime();
+  const settings = useSettings(runtime.storage);
   const connection = useConnection();
   const upstream = useUpstream();
-  const runtime = useStreamRuntime();
   const adaptiveActive = useAdaptiveActive();
   const status = describeStatus(connection.state, upstream);
+  const stored = settings.storage;
 
   // The gateway advertises its tick (the fastest cadence) in `hello`; 100 ms until known.
   const minMs = connection.minCadenceMs ?? 100;
@@ -43,19 +47,47 @@ export function SettingsScreen() {
 
   // Slider drag: previews while dragging, commits one cadence request on release.
   const { setCadence } = settings;
-  const pan = useMemo(() => {
-    const toMs = (x: number) => ratioToMs(Math.max(0, Math.min(1, sliderWidth > 0 ? x / sliderWidth : 0)));
-    return Gesture.Pan()
+  const commitMs = useCallback(
+    (ms: number) => setCadence(ms <= minMs ? null : Math.min(ms, MAX_CADENCE_MS)),
+    [setCadence, minMs]
+  );
+  // Slider gestures: a horizontal drag (pan) or a tap on the track. Exclusive gives the pan priority;
+  // the tap only fires when no drag started.
+  const sliderGesture = useMemo(() => {
+    const toMs = (x: number) => ratioToMs(Math.max(0, Math.min(1, x / sliderWidth)));
+    const pan = Gesture.Pan()
       .runOnJS(true)
-      .minDistance(0)
-      .onBegin((e) => setDragMs(toMs(e.x)))
+      // Horizontal movement claims the slider; vertical movement fails it so the ScrollView scrolls.
+      .activeOffsetX([-8, 8])
+      .failOffsetY([-12, 12])
+      // Before the first layout the width is 0 and every position would map to the minimum.
+      .enabled(sliderWidth > 0)
+      .onStart((e) => setDragMs(toMs(e.x)))
       .onUpdate((e) => setDragMs(toMs(e.x)))
-      .onEnd((e) => {
-        const ms = toMs(e.x);
-        setCadence(ms <= minMs ? null : ms);
+      .onEnd((e, success) => {
+        // Cancelled (e.g. the scroll view took over): keep the current cadence.
+        if (success) commitMs(toMs(e.x));
       })
-      .onFinalize(() => setDragMs(null));
-  }, [sliderWidth, ratioToMs, minMs, setCadence]);
+      .onFinalize(() => setDragMs(null))
+      .withTestId('cadence-pan');
+    const tap = Gesture.Tap()
+      .runOnJS(true)
+      .enabled(sliderWidth > 0)
+      .onEnd((e, success) => {
+        if (success) commitMs(toMs(e.x));
+      })
+      .withTestId('cadence-tap');
+    return Gesture.Exclusive(pan, tap);
+  }, [sliderWidth, ratioToMs, commitMs]);
+
+  const onSliderAction = useCallback(
+    (e: AccessibilityActionEvent) => {
+      const delta = e.nativeEvent.actionName === 'increment' ? step : e.nativeEvent.actionName === 'decrement' ? -step : 0;
+      if (delta === 0) return;
+      commitMs(Math.max(minMs, Math.min(MAX_CADENCE_MS, preferredMs + delta)));
+    },
+    [step, minMs, preferredMs, commitMs]
+  );
 
   const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -101,14 +133,17 @@ export function SettingsScreen() {
         </View>
 
         <View style={styles.sliderContainer}>
-          <GestureDetector gesture={pan}>
+          <GestureDetector gesture={sliderGesture}>
           <View
             style={styles.sliderHitArea}
             accessibilityRole="adjustable"
             accessibilityLabel="Update frequency"
             accessibilityValue={{ min: minMs, max: MAX_CADENCE_MS, now: displayMs, text: `${displayMs} milliseconds` }}
+            accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+            onAccessibilityAction={onSliderAction}
+            testID="cadence-slider"
           >
-            <View style={styles.track} onLayout={handleTrackLayout} pointerEvents="none">
+            <View style={styles.track} onLayout={handleTrackLayout} pointerEvents="none" testID="cadence-track">
               <View style={[styles.filledTrack, { width: thumbPosition }]} />
               <View style={[styles.thumb, { left: thumbPosition }]} />
             </View>
@@ -204,9 +239,11 @@ export function SettingsScreen() {
           </>
         ) : null}
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => runtime.client.reconnectNow()} activeOpacity={0.7}>
-          <Text style={styles.secondaryButtonText}>Reconnect Now</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => runtime.client.reconnectNow()} activeOpacity={0.7}>
+            <Text style={styles.secondaryButtonText}>Reconnect Now</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Storage */}
@@ -220,25 +257,41 @@ export function SettingsScreen() {
         </View>
         <View style={styles.statRow}>
           <Text style={styles.statLabel}>Storage</Text>
-          <Text style={styles.statValue}>
-            {STORAGE_ENGINE_LABEL[settings.storageStats.engine]}
+          <Text style={styles.statValue}>{STORAGE_ENGINE_LABEL[stored.engine]}</Text>
+        </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Favourites</Text>
+          <Text style={[styles.statValue, styles.statValueWrap]} testID="storage-favorites">
+            {stored.favorites.length === 0
+              ? 'None'
+              : `${stored.favorites.length} · ${stored.favorites.map((p) => SUPPORTED_PAIRS[p].baseAsset).join(', ')}`}
           </Text>
         </View>
         <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Stored keys / size</Text>
-          <Text style={styles.statValue}>
-            {settings.storageStats.keysCount} keys · {(settings.storageStats.estimatedBytes / 1024).toFixed(1)} KB
+          <Text style={styles.statLabel}>Active pair</Text>
+          <Text style={styles.statValue} testID="storage-active-pair">
+            {SUPPORTED_PAIRS[stored.activePair].displayName}
+          </Text>
+        </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Cadence</Text>
+          <Text style={styles.statValue} testID="storage-cadence">
+            {stored.cadenceMs === null ? 'Gateway default' : `${stored.cadenceMs}ms`}
+          </Text>
+        </View>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Cached prices</Text>
+          <Text style={styles.statValue} testID="storage-cached-prices">
+            {stored.cachedPrices
+              ? `${stored.cachedPrices.pairs} pairs · ${formatBytes(stored.cachedPrices.bytes)}`
+              : 'None'}
           </Text>
         </View>
         <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => defaultStorage.delete(STORAGE_KEYS.MARKET_SNAPSHOT)}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => runtime.clearCachedPrices()} activeOpacity={0.7}>
             <Text style={styles.secondaryButtonText}>Clear Cached Prices</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.dangerButton} onPress={settings.resetDefaults} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.dangerButton} onPress={() => runtime.resetPreferences()} activeOpacity={0.7}>
             <Text style={styles.dangerButtonText}>Reset Preferences</Text>
           </TouchableOpacity>
         </View>

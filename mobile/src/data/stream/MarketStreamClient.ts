@@ -14,7 +14,7 @@ export type ConnectionState = 'idle' | 'connecting' | 'open' | 'backoff' | 'offl
 
 export interface ConnectionSnapshot {
   state: ConnectionState;
-  /** Consecutive failed attempts since the last successful open. */
+  /** Consecutive failed attempts since the last connection that delivered market data. */
   attempt: number;
   nextRetryAt: number | null;
   lastCloseCode: number | null;
@@ -33,6 +33,8 @@ export interface StreamStats {
   bytes: number;
   messages: number;
   invalidFrames: number;
+  /** Messages inside valid frames that were dropped (unknown type or malformed). */
+  droppedMessages: number;
   connects: number;
 }
 
@@ -71,17 +73,37 @@ export interface StreamClientOptions {
   pingIntervalMs?: number;
   /** Close and reconnect when nothing (data or pong) has arrived for this long. */
   idleTimeoutMs?: number;
+  /** Give up on a socket that has not opened within this long and back off (default 10 s). */
+  connectTimeoutMs?: number;
 }
 
 const OPEN = 1;
 const CLOSE_NORMAL = 1000;
 const KNOWN_TYPES = new Set(['hello', 'status', 'tickers', 'book', 'ack', 'pong', 'error']);
 
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Field-level check of one ticker element (the store and every row render trust these). */
+function isTicker(t: unknown): boolean {
+  if (!t || typeof t !== 'object') return false;
+  const x = t as Record<string, unknown>;
+  return (
+    typeof x.pair === 'string' &&
+    isNum(x.price) &&
+    isNum(x.change24h) &&
+    isNum(x.high24h) &&
+    isNum(x.low24h) &&
+    isNum(x.volume24h) &&
+    isNum(x.updatedAt)
+  );
+}
+
 /**
  * Parses and sanity-checks a gateway frame without a schema library (hot path, ~10 frames/s).
- * Returns null for anything that is not a protocol v1 frame; unknown message types are dropped.
+ * Returns null for anything that is not a protocol v1 frame. Unknown or malformed messages (and
+ * malformed ticker elements) are dropped and counted in `counters.dropped`.
  */
-export function parseFrame(data: unknown): ServerMessage[] | null {
+export function parseFrame(data: unknown, counters?: { dropped: number }): ServerMessage[] | null {
   if (typeof data !== 'string') return null;
   let frame: { v?: unknown; msgs?: unknown };
   try {
@@ -91,12 +113,29 @@ export function parseFrame(data: unknown): ServerMessage[] | null {
   }
   if (!frame || frame.v !== PROTOCOL_VERSION || !Array.isArray(frame.msgs)) return null;
   const out: ServerMessage[] = [];
+  let dropped = 0;
   for (const m of frame.msgs as Array<{ type?: unknown; data?: unknown; bids?: unknown; asks?: unknown; pair?: unknown }>) {
-    if (!m || typeof m.type !== 'string' || !KNOWN_TYPES.has(m.type)) continue;
-    if (m.type === 'tickers' && !Array.isArray(m.data)) continue;
-    if (m.type === 'book' && (typeof m.pair !== 'string' || !Array.isArray(m.bids) || !Array.isArray(m.asks))) continue;
+    if (!m || typeof m.type !== 'string' || !KNOWN_TYPES.has(m.type)) {
+      dropped++;
+      continue;
+    }
+    if (m.type === 'tickers') {
+      if (!Array.isArray(m.data)) {
+        dropped++;
+        continue;
+      }
+      const valid = m.data.filter(isTicker);
+      dropped += m.data.length - valid.length;
+      out.push((valid.length === m.data.length ? m : { ...m, data: valid }) as ServerMessage);
+      continue;
+    }
+    if (m.type === 'book' && (typeof m.pair !== 'string' || !Array.isArray(m.bids) || !Array.isArray(m.asks))) {
+      dropped++;
+      continue;
+    }
     out.push(m as ServerMessage);
   }
+  if (counters) counters.dropped += dropped;
   return out;
 }
 
@@ -117,7 +156,10 @@ export class MarketStreamClient {
   private desiredCadenceMs: number | null = null;
 
   private backoffTimer: unknown = null;
+  private connectTimer: unknown = null;
   private heartbeatTimer: unknown = null;
+  /** True once the current socket has delivered market data (attempts reset then, not on open). */
+  private receivedDataSinceOpen = false;
   private lastInboundAt = 0;
   private pingSeq = 0;
   private readonly pendingPings = new Map<number, number>();
@@ -137,7 +179,8 @@ export class MarketStreamClient {
     cadenceMs: null,
     openedAt: null,
   };
-  private readonly stats: StreamStats = { frames: 0, bytes: 0, messages: 0, invalidFrames: 0, connects: 0 };
+  private readonly stats: StreamStats = { frames: 0, bytes: 0, messages: 0, invalidFrames: 0, droppedMessages: 0, connects: 0 };
+  private readonly dropCounter = { dropped: 0 };
 
   private readonly messageListeners = new Set<(msgs: ServerMessage[]) => void>();
   private readonly connectionListeners = new Set<(s: ConnectionSnapshot) => void>();
@@ -146,6 +189,7 @@ export class MarketStreamClient {
   private readonly backoffMaxMs: number;
   private readonly pingIntervalMs: number;
   private readonly idleTimeoutMs: number;
+  private readonly connectTimeoutMs: number;
   private readonly random: () => number;
 
   constructor(
@@ -157,6 +201,7 @@ export class MarketStreamClient {
     this.backoffMaxMs = options.backoffMaxMs ?? 30_000;
     this.pingIntervalMs = options.pingIntervalMs ?? 5000;
     this.idleTimeoutMs = options.idleTimeoutMs ?? 12_000;
+    this.connectTimeoutMs = options.connectTimeoutMs ?? 10_000;
     this.random = deps.random ?? Math.random;
   }
 
@@ -224,7 +269,7 @@ export class MarketStreamClient {
   }
 
   public getStats(): StreamStats {
-    return { ...this.stats };
+    return { ...this.stats, droppedMessages: this.dropCounter.dropped };
   }
 
   // ---------------------------------------------------------------------------
@@ -258,13 +303,25 @@ export class MarketStreamClient {
     }
     this.socket = socket;
     this.stats.connects++;
+    this.receivedDataSinceOpen = false;
+
+    // A socket stuck in CONNECTING (e.g. a black-holed SYN) never fires onclose on some platforms.
+    this.connectTimer = this.deps.scheduler.setTimeout(() => {
+      this.connectTimer = null;
+      if (this.socket !== socket || this.snapshot.state !== 'connecting') return;
+      this.teardown(CLOSE_NORMAL);
+      this.scheduleBackoff(null);
+    }, this.connectTimeoutMs);
 
     socket.onopen = () => {
       if (this.socket !== socket) return;
+      this.clearConnectTimer();
       const now = this.deps.scheduler.now();
       this.lastInboundAt = now;
       this.sentChannels.clear();
-      this.update({ state: 'open', attempt: 0, openedAt: now, cadenceMs: null });
+      // Attempts are not reset here: a gateway that accepts and then closes straight away must
+      // keep backing off. The first market data message resets them (handleData).
+      this.update({ state: 'open', openedAt: now, cadenceMs: null });
       this.syncChannels();
       // A new session starts at the gateway default; only a user preference needs sending.
       if (this.desiredCadenceMs !== null) {
@@ -281,6 +338,7 @@ export class MarketStreamClient {
     socket.onclose = (event) => {
       if (this.socket !== socket) return;
       this.socket = null;
+      this.clearConnectTimer();
       this.stopHeartbeat();
       this.update({ lastCloseCode: event.code, openedAt: null });
       if (!this.started || !this.active) return;
@@ -312,6 +370,7 @@ export class MarketStreamClient {
   /** Closes the current socket (if any) without triggering reconnection, and clears timers. */
   private teardown(code: number): void {
     this.clearBackoff();
+    this.clearConnectTimer();
     this.stopHeartbeat();
     const socket = this.socket;
     this.socket = null;
@@ -322,6 +381,13 @@ export class MarketStreamClient {
       } catch {
         // already closed
       }
+    }
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer !== null) {
+      this.deps.scheduler.clearTimeout(this.connectTimer);
+      this.connectTimer = null;
     }
   }
 
@@ -410,10 +476,16 @@ export class MarketStreamClient {
     this.stats.frames++;
     if (typeof data === 'string') this.stats.bytes += data.length;
 
-    const msgs = parseFrame(data);
+    const msgs = parseFrame(data, this.dropCounter);
     if (!msgs) {
       this.stats.invalidFrames++;
       return;
+    }
+    // Only market data proves the session works: hello + status arrive on every connect, even
+    // from a gateway that then closes straight away.
+    if (!this.receivedDataSinceOpen && msgs.some((m) => m.type === 'tickers' || m.type === 'book')) {
+      this.receivedDataSinceOpen = true;
+      if (this.snapshot.attempt !== 0) this.update({ attempt: 0 });
     }
     this.stats.messages += msgs.length;
 

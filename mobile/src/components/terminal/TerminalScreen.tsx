@@ -3,6 +3,7 @@ import { View, ScrollView } from 'react-native';
 import { useIsFocused } from 'expo-router';
 import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { useActivePair, useBook, useTicker } from '../../data/store/hooks';
+import { usePairsMetadata } from '../../hooks/usePairsMetadata';
 import { useChannels } from '../../data/useChannels';
 import { MarketStatusBanner } from '../common/MarketStatusBanner';
 import { Skeleton } from '../common/Skeleton';
@@ -20,14 +21,26 @@ export function TerminalScreen() {
 
   const ticker = useTicker(pair);
   const book = useBook(pair);
-  const { baseAsset, quoteAsset, priceDecimals, qtyDecimals } = SUPPORTED_PAIRS[pair];
+  // Exchange filters from /pairs/meta decide the decimals (e.g. DOGE/XRP); the static table is
+  // only the fallback until metadata has loaded.
+  const meta = usePairsMetadata().data?.find((p) => p.symbol === pair);
+  const { baseAsset, quoteAsset } = SUPPORTED_PAIRS[pair];
+  const priceDecimals = meta?.priceDecimals ?? SUPPORTED_PAIRS[pair].priceDecimals;
+  const qtyDecimals = meta?.qtyDecimals ?? SUPPORTED_PAIRS[pair].qtyDecimals;
 
   return (
     <View style={styles.container}>
       <MarketStatusBanner />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {ticker ? (
-          <LastPriceHero pair={pair} ticker={ticker} bookUpdatedAt={book?.updatedAt} priceDecimals={priceDecimals} baseAsset={baseAsset} />
+          <LastPriceHero
+            pair={pair}
+            ticker={ticker}
+            bookUpdatedAt={book?.updatedAt}
+            bookReceivedAt={book?.receivedAt}
+            priceDecimals={priceDecimals}
+            baseAsset={baseAsset}
+          />
         ) : (
           <View style={styles.skeletonHero}>
             <Skeleton width={90} height={12} />

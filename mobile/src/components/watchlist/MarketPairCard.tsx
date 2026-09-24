@@ -25,8 +25,10 @@ export interface MarketPairCardProps {
  */
 export const MarketPairCard = React.memo(function MarketPairCard({ row, isFavorite, onToggleFavorite, onPress }: MarketPairCardProps) {
   const ticker = useTicker(row.symbol);
-  const freshness = usePairFreshness(row.symbol, ticker?.updatedAt, ticker?.origin);
   const values = ticker ?? (row.snapshot && { price: row.snapshot.lastPrice, ...row.snapshot });
+  // REST values (before the first stream ticker) count as data: OFFLINE when disconnected.
+  const source = ticker?.origin ?? (values ? 'rest' : undefined);
+  const freshness = usePairFreshness(row.symbol, ticker?.updatedAt, source, ticker?.receivedAt);
 
   const change = values ? formatChange(values.change24h) : null;
   const halted = row.tradingStatus && row.tradingStatus !== 'TRADING';
@@ -75,7 +77,7 @@ export const MarketPairCard = React.memo(function MarketPairCard({ row, isFavori
         <View style={styles.rightColumn}>
           {values && change ? (
             <>
-              <PriceFlash flashKey={row.symbol} price={values.price} style={styles.priceFlash}>
+              <PriceFlash flashKey={row.symbol} source={source} price={values.price} style={styles.priceFlash}>
                 <Text style={styles.priceText}>{priceText}</Text>
               </PriceFlash>
               <View style={[styles.changePill, change.positive ? styles.changePillPositive : styles.changePillNegative]}>
