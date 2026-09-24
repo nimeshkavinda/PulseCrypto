@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import net from 'node:net';
 import { WebSocketServer, WebSocket } from 'ws';
 import { SupportedPairSymbol } from '@pulsecrypto/shared';
 import { BinanceConnector, buildStreamUrl } from '../src/binance.js';
@@ -22,6 +23,7 @@ describe('BinanceConnector', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     connector?.disconnect();
     connector = null;
     for (const c of server.clients) c.terminate();
@@ -95,6 +97,87 @@ describe('BinanceConnector', () => {
     const text = await metrics.getMetrics();
     for (const reason of ['json', 'envelope', 'symbol', 'aggTrade', 'depth', 'ticker', 'stream']) {
       expect(text).toContain(`pulsecrypto_upstream_messages_invalid_total{reason="${reason}"}`);
+    }
+  });
+
+  it('counts JSON literals that are not an envelope (null, numbers, arrays) without throwing', async () => {
+    const { ws } = await connected();
+    ws.send('null');
+    ws.send('42');
+    ws.send('[]');
+    await tick();
+    expect(await metrics.getMetrics()).toMatch(/pulsecrypto_upstream_messages_invalid_total\{reason="envelope"\} 3/);
+  });
+
+  it('counts a throwing handler as invalid and keeps processing later frames', async () => {
+    const got: number[] = [];
+    const { connector: c, ws } = await connected();
+    c.onTrade((_p, price) => {
+      if (price === 1) throw new Error('boom');
+      got.push(price);
+    });
+    ws.send(JSON.stringify({ stream: 'btcusdt@aggTrade', data: { p: '1', T: 1 } }));
+    ws.send(JSON.stringify({ stream: 'btcusdt@aggTrade', data: { p: '2', T: 2 } }));
+    await tick();
+    expect(got).toEqual([2]);
+    expect(await metrics.getMetrics()).toContain('pulsecrypto_upstream_messages_invalid_total{reason="handler"} 1');
+  });
+
+  it('keeps growing the backoff while the upstream accepts and then closes without valid data', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(1); // no jitter: each delay is the full cap
+    const opens: number[] = [];
+    server.on('connection', (ws) => {
+      opens.push(Date.now());
+      ws.send(JSON.stringify({ result: null, id: 1 })); // not a stream message: must not reset
+      ws.close();
+    });
+    connector = new BinanceConnector({ wsBaseUrl: `ws://127.0.0.1:${port}`, metrics, reconnectInitialDelayMs: 25 });
+    connector.connect();
+    await vi.waitFor(() => expect(opens.length).toBeGreaterThanOrEqual(5), { timeout: 3000, interval: 20 });
+    const gaps = opens.slice(1).map((t, i) => t - opens[i]);
+    // Delays are 25, 50, 100, 200 ms; with a reset on open they would all stay at 25 ms.
+    expect(gaps[3]).toBeGreaterThan(gaps[0] * 3);
+    expect(gaps[3]).toBeGreaterThanOrEqual(190);
+  });
+
+  it('resets the backoff once the upstream delivers a message', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(1);
+    const opens: number[] = [];
+    server.on('connection', (ws) => {
+      opens.push(Date.now());
+      // Flap three times, then deliver one valid stream message before closing.
+      if (opens.length === 4) ws.send(JSON.stringify({ stream: 'btcusdt@aggTrade', data: { p: '1', T: 1 } }));
+      setTimeout(() => ws.close(), 10);
+    });
+    connector = new BinanceConnector({ wsBaseUrl: `ws://127.0.0.1:${port}`, metrics, reconnectInitialDelayMs: 25 });
+    connector.connect();
+    await vi.waitFor(() => expect(opens.length).toBeGreaterThanOrEqual(5), { timeout: 3000, interval: 20 });
+    const gaps = opens.slice(1).map((t, i) => t - opens[i]);
+    // gaps[2] follows three silent closes (~100 ms delay); gaps[3] follows a message (back to ~25 ms).
+    expect(gaps[3]).toBeLessThan(gaps[2]);
+    expect(gaps[3]).toBeLessThan(90);
+  });
+
+  it('aborts a handshake the server never answers and tries again', async () => {
+    // Accepts TCP but never answers the HTTP upgrade.
+    const sockets: net.Socket[] = [];
+    const silent = net.createServer((s) => void sockets.push(s));
+    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', () => resolve()));
+    const silentPort = (silent.address() as net.AddressInfo).port;
+    try {
+      connector = new BinanceConnector({
+        wsBaseUrl: `ws://127.0.0.1:${silentPort}`,
+        metrics,
+        handshakeTimeoutMs: 50,
+        reconnectInitialDelayMs: 20,
+      });
+      connector.connect();
+      await vi.waitFor(() => expect(sockets.length).toBeGreaterThanOrEqual(2), { timeout: 2000, interval: 20 });
+    } finally {
+      connector?.disconnect();
+      connector = null;
+      sockets.forEach((s) => s.destroy());
+      await new Promise<void>((resolve) => silent.close(() => resolve()));
     }
   });
 

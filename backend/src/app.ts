@@ -43,6 +43,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       maxConnections: config.WS_MAX_CONNECTIONS,
       rateLimitBurst: config.WS_RATE_LIMIT_BURST,
       rateLimitPerSec: config.WS_RATE_LIMIT_PER_SEC,
+      heartbeatMs: config.WS_HEARTBEAT_MS,
     });
   const readiness =
     options.readiness ??

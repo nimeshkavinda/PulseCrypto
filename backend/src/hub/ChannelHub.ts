@@ -179,7 +179,11 @@ export class ChannelHub {
   /** One fan-out pass. Public so tests can drive it deterministically. */
   public tick(): void {
     this.tickCount += 1;
-    if (this.sessions.size === 0) return;
+    if (this.sessions.size === 0) {
+      // Otherwise the gauge keeps its last value after the last (lagging) client leaves.
+      this.opts.metrics.laggingClients.set(0);
+      return;
+    }
 
     const started = process.hrtime.bigint();
     const now = this.now();

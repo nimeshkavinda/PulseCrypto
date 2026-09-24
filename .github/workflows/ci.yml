@@ -11,6 +11,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -73,8 +76,11 @@ jobs:
           node -e '
             const out = require("fs").readFileSync("loadtest.log", "utf8");
             const r = JSON.parse(out.slice(out.indexOf("\n{") + 1));
-            console.log({ healthy: r.healthyConnectedAtEnd, fps: r.framesPerHealthyClientPerSec });
-            if (r.framesPerHealthyClientPerSec < 9) throw new Error("healthy clients fell below 9 frames/s");
+            const expected = r.expectedHealthy, healthy = r.healthyConnectedAtEnd, fps = r.framesPerHealthyClientPerSec;
+            console.log({ expected, healthy, fps });
+            if (![expected, healthy, fps].every(Number.isFinite)) throw new Error("load-test output is missing numbers");
+            if (healthy < 0.95 * expected) throw new Error("fewer than 95% of the healthy (non-slow) clients stayed connected");
+            if (fps < 9) throw new Error("healthy clients fell below 9 frames/s");
           '
 
   android-e2e:

@@ -34,8 +34,10 @@ function openClient(cfg: WorkerConfig, i: number) {
   const slow = i < Math.round(cfg.count * cfg.slowShare);
   const terminal = !slow && Math.random() < cfg.terminalShare;
   const ws = new WebSocket(cfg.url, { perMessageDeflate: false });
+  let didOpen = false;
 
   ws.on('open', () => {
+    didOpen = true;
     opened++;
     const channels = slow ? ['tickers', ...PAIRS.map((p) => `book:${p}`)] : ['tickers'];
     if (terminal) channels.push(`book:${PAIRS[i % PAIRS.length]}`);
@@ -62,7 +64,8 @@ function openClient(cfg: WorkerConfig, i: number) {
   ws.on('close', (code) => {
     const key = `${slow ? 'slow' : 'healthy'}:${code}`;
     closes[key] = (closes[key] ?? 0) + 1;
-    if (!slow) healthyClients--;
+    // A socket that never opened was never counted as healthy.
+    if (!slow && didOpen) healthyClients--;
   });
   ws.on('error', () => {
     failed++;

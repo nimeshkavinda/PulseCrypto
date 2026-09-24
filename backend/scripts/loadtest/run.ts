@@ -38,6 +38,22 @@ async function stats(reset = false) {
   return (await res.json()) as Record<string, number>;
 }
 
+const children: ChildProcess[] = [];
+let finishing = false;
+let failEarly: (err: Error) => void = () => {};
+/** Rejects as soon as the gateway or a client process exits before the run finishes. */
+const earlyExit = new Promise<never>((_, reject) => {
+  failEarly = reject;
+});
+function watchExit(child: ChildProcess, name: string) {
+  children.push(child);
+  child.once('exit', (code, signal) => {
+    if (!finishing) failEarly(new Error(`${name} exited early (code ${code}, signal ${signal})`));
+  });
+}
+/** Waits for `p`, failing fast if a child process dies in the meantime. */
+const guarded = <T>(p: Promise<T>) => Promise.race([p, earlyExit]);
+
 async function main() {
   const profileDir = args.profile;
   const server: ChildProcess = fork(path.join(here, 'server.ts'), [], {
@@ -50,27 +66,32 @@ async function main() {
       WS_HEARTBEAT_MS: '30000',
     },
   });
-  await new Promise<void>((resolve) => server.on('message', (m: { type: string }) => m.type === 'ready' && resolve()));
+  watchExit(server, 'gateway');
+  await guarded(new Promise<void>((resolve) => server.on('message', (m: { type: string }) => m.type === 'ready' && resolve())));
 
   const perWorker = Math.ceil(clients / workers);
   const procs: ChildProcess[] = [];
+  // Clients that are not slow readers, rounded per worker exactly as client-worker.ts does.
+  let expectedHealthy = 0;
   for (let w = 0; w < workers; w++) {
     const count = Math.min(perWorker, clients - w * perWorker);
     if (count <= 0) break;
+    expectedHealthy += count - Math.round(count * slowShare);
     const p = fork(path.join(here, 'client-worker.ts'), [], tsx);
+    watchExit(p, `client worker ${w}`);
     p.send({ type: 'start', config: { url: `ws://127.0.0.1:${port}/ws`, count, terminalShare, slowShare, rampMs } });
     procs.push(p);
   }
 
   console.log(`Ramping ${clients} clients over ${rampMs} ms across ${procs.length} client processes...`);
-  await sleep(rampMs + 3000);
-  await stats(true);
+  await guarded(sleep(rampMs + 3000));
+  await guarded(stats(true));
   procs.forEach((p) => p.send({ type: 'measure' }));
   console.log(`Measuring for ${durationS}s...`);
-  await sleep(durationS * 1000);
+  await guarded(sleep(durationS * 1000));
 
-  const server1 = await stats();
-  const reports = await Promise.all(
+  const server1 = await guarded(stats());
+  const reports = await guarded(Promise.all(
     procs.map(
       (p) =>
         new Promise<Record<string, unknown>>((resolve) => {
@@ -78,7 +99,7 @@ async function main() {
           p.send({ type: 'report' });
         })
     )
-  );
+  ));
 
   const sum = (k: string) => reports.reduce((a, r) => a + (r[k] as number), 0);
   const latencies = reports.flatMap((r) => r.latencies as number[]);
@@ -88,6 +109,7 @@ async function main() {
 
   const result = {
     clients,
+    expectedHealthy,
     opened: sum('opened'),
     failed: sum('failed'),
     healthyConnectedAtEnd: healthy,
@@ -108,6 +130,7 @@ async function main() {
   };
   console.log(JSON.stringify(result, null, 2));
 
+  finishing = true;
   procs.forEach((p) => p.send({ type: 'exit' }));
   // SIGTERM (not SIGKILL) lets --cpu-prof flush the profile when --profile is set.
   server.kill('SIGTERM');
@@ -115,4 +138,8 @@ async function main() {
   process.exit(0);
 }
 
-void main();
+main().catch((err: Error) => {
+  console.error(`Load test failed: ${err.message}`);
+  for (const child of children) child.kill('SIGKILL');
+  process.exit(1);
+});

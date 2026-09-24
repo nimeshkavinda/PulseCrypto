@@ -1,10 +1,28 @@
 import { FastifyInstance } from 'fastify';
+import { UpstreamStatus } from '@pulsecrypto/shared';
 import { ChannelHub } from '../hub/ChannelHub.js';
 
 export interface Readiness {
   ready: boolean;
   /** Human-readable reasons the gateway is not ready (empty when ready). */
   reasons: string[];
+}
+
+/**
+ * Production readiness: metadata has loaded and the upstream feed is `live` or `stale` (partial
+ * data is still worth serving). `connecting` and `down` mean there is nothing current to serve.
+ */
+export function upstreamReadiness(
+  metadata: { isReady(): boolean },
+  upstreamStatus: () => UpstreamStatus
+): () => Readiness {
+  return () => {
+    const reasons: string[] = [];
+    if (!metadata.isReady()) reasons.push('metadata not loaded');
+    const upstream = upstreamStatus();
+    if (upstream !== 'live' && upstream !== 'stale') reasons.push(`upstream ${upstream}`);
+    return { ready: reasons.length === 0, reasons };
+  };
 }
 
 export interface HealthRoutesOptions {

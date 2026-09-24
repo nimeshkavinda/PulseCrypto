@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { PairMetadataSchema } from '@pulsecrypto/shared';
+import { PairMetadataSchema, UpstreamStatus } from '@pulsecrypto/shared';
 import { buildApp } from '../src/app.js';
 import { buildMetricsApp } from '../src/http/metrics.routes.js';
+import { upstreamReadiness } from '../src/http/health.routes.js';
 import { loadConfig } from '../src/config.js';
 import { MetadataService } from '../src/metadata.js';
 import { MetricsRegistry } from '../src/metrics.js';
@@ -106,6 +107,29 @@ describe('HTTP routes', () => {
     const ready = await app.inject({ method: 'GET', url: '/ready' });
     expect(ready.statusCode).toBe(200);
     await app.close();
+  });
+
+  describe('upstreamReadiness (production /ready)', () => {
+    const cases: Array<[UpstreamStatus, boolean, number]> = [
+      ['connecting', true, 503],
+      ['down', true, 503],
+      ['live', true, 200],
+      ['stale', true, 200],
+      ['connecting', false, 503],
+      ['down', false, 503],
+      ['live', false, 503],
+      ['stale', false, 503],
+    ];
+    it.each(cases)('upstream %s, metadata loaded %s -> %i', async (upstream, loaded, code) => {
+      const readiness = upstreamReadiness({ isReady: () => loaded }, () => upstream);
+      const app = await buildApp({ enableLogger: false, readiness });
+      const res = await app.inject({ method: 'GET', url: '/ready' });
+      expect(res.statusCode).toBe(code);
+      const reasons: string[] = res.json().reasons;
+      expect(reasons.includes('metadata not loaded')).toBe(!loaded);
+      expect(reasons.includes(`upstream ${upstream}`)).toBe(upstream === 'connecting' || upstream === 'down');
+      await app.close();
+    });
   });
 
   it('GET /ready defaults to metadata readiness', async () => {
