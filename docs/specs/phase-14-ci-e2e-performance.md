@@ -5,7 +5,7 @@ created: '2026-09-23'
 status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
-baseline_commit: 'c1a87417770e4c214584879c8ec2c02a59883ca8'
+baseline_commit: '1486f957ace6509b8dfdf4c70abc6e0966d96a21'
 context:
   - '{project-root}/docs/performance.md'
 ---
@@ -83,7 +83,11 @@ context:
 - **Fixed while writing the flows:**
   - The favourite star was nested inside the row's accessible touchable. iOS merges that into one element, so VoiceOver and Maestro could not reach the star. It is now a sibling of the row's touchable.
   - With the search keyboard open, the first tap on a row or star only dismissed the keyboard. The list now uses `keyboardShouldPersistTaps="handled"` and dismisses the keyboard on drag.
-- **Cleartext in release:** `plugins/withLocalCleartext.js` adds an Android network security config that allows cleartext only to `localhost`, `127.0.0.1` and `10.0.2.2`, so a release APK can reach a local gateway. Everything else still requires TLS. This supersedes the Phase 13 note that release builds need `wss://` even for local testing.
+- **Cleartext:** `plugins/withLocalCleartext.js` adds an Android network security config.
+  - Release: cleartext only to `localhost`, `127.0.0.1` and `10.0.2.2`, so a release APK can reach a local gateway. Everything else still requires TLS.
+  - Debug: its own config in the debug source set allows cleartext. From API 24, a network security config overrides the debug manifest's `usesCleartextTraffic`, so without it a debug build on a physical device couldn't load the bundle from Metro or reach a LAN gateway (found in pre-merge review).
+  - Checked by dumping `res/xml/network_security_config.xml` from both APKs with `aapt2`; pinned by `tests/cleartextPlugin.test.ts`.
+  - This supersedes the Phase 13 note that release builds need `wss://` even for local testing.
 - **Performance evidence:** see `docs/performance.md` → "On device". Summary:
   - Android release at 20 frames/s: terminal 17 / 18 / 19 ms (p50 / p90 / p99), watchlist 17 / 20 / 22 ms, legacy jank ≤ 0.4%.
   - iOS release: JS thread 60 fps.
