@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { filterAndSortPairs } from '../src/components/watchlist/filterUtils';
 import { PairMetadata } from '@pulsecrypto/shared';
 

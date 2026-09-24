@@ -104,6 +104,7 @@ context:
 - Results: 10k clients on one process at 58% ELU, tick p99 73 ms (< 100 ms budget), frame latency p99 59 ms. Every 2% slow reader was skipped then closed with 1013, and no healthy client was lost.
 - The image went from 1.99 GB to 309 MB: 47 packages, 39.7 MB of `node_modules`, and no React/Expo. It runs as `node`, with a single healthcheck. Metrics port 9464 is bound to localhost in compose.
 - The load harness covers the real-socket slow-consumer scenario deferred from Phase 9.
+- Found in Phase 11 device testing: the shared frame `Buffer`s were being sent as binary WebSocket frames. They're now sent as text frames (`{ binary: false }`), with an integration assertion.
 - Readiness counts upstream `stale` as ready: the instance still serves real, partially fresh data, and taking every replica out during a partial upstream stall would cause a full outage.
 
 ## Spec Change Log

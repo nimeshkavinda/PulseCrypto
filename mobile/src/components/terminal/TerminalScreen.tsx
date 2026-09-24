@@ -1,60 +1,53 @@
 import React from 'react';
-import { View, ScrollView } from 'react-native';
-import { useMarketConnection, useMarketData } from '../../hooks/useMarketStream';
+import { View, ScrollView, Text } from 'react-native';
+import { useIsFocused } from 'expo-router';
 import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
+import { useActivePair, useBook, useTicker } from '../../data/store/hooks';
+import { useChannels } from '../../data/useChannels';
 import { LastPriceHero } from './LastPriceHero';
 import { OrderBookTable } from './OrderBookTable';
 import { MarketDepthChart } from './MarketDepthChart';
 import { styles } from './TerminalScreen.styles';
 
 export function TerminalScreen() {
-  const { activePair } = useMarketConnection();
-  const { activePayload, priceDirection } = useMarketData();
+  const pair = useActivePair();
+  const isFocused = useIsFocused();
+  // The order book streams only while this screen is visible, and only for the active pair.
+  useChannels(['tickers', `book:${pair}`], isFocused);
 
-  if (!activePayload) {
-    return <View style={styles.container} />;
-  }
-
-  const pairConfig = SUPPORTED_PAIRS[activePair];
-  const baseAsset = pairConfig?.baseAsset ?? 'BTC';
-  const quoteAsset = pairConfig?.quoteAsset ?? 'USDT';
-  const priceDecimals = pairConfig?.priceDecimals ?? 2;
-  const qtyDecimals = pairConfig?.qtyDecimals ?? 4;
+  const ticker = useTicker(pair);
+  const book = useBook(pair);
+  const { baseAsset, quoteAsset, priceDecimals, qtyDecimals } = SUPPORTED_PAIRS[pair];
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={true}
-      >
-        {/* T5.1: Hero Section */}
-        <LastPriceHero
-          payload={activePayload}
-          priceDirection={priceDirection}
-        />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {ticker ? (
+          <LastPriceHero ticker={ticker} priceDecimals={priceDecimals} />
+        ) : (
+          <Text style={styles.placeholder}>Waiting for market data…</Text>
+        )}
 
-        {/* T5.2 & T5.3: Live Order Book Table */}
-        <OrderBookTable
-          bids={activePayload.bids}
-          asks={activePayload.asks}
-          baseAsset={baseAsset}
-          quoteAsset={quoteAsset}
-          priceDecimals={priceDecimals}
-          qtyDecimals={qtyDecimals}
-          spread={activePayload.spread}
-          spreadPct={activePayload.spreadPct}
-        />
-
-        {/* T5.4: Dual-Mountain SVG Market Depth Chart */}
-        <MarketDepthChart
-          bids={activePayload.bids}
-          asks={activePayload.asks}
-          baseAsset={baseAsset}
-          spreadPct={activePayload.spreadPct}
-          buyPressure={activePayload.buyPressure}
-          sellPressure={activePayload.sellPressure}
-        />
+        {book ? (
+          <>
+            <OrderBookTable
+              bids={book.bids}
+              asks={book.asks}
+              baseAsset={baseAsset}
+              quoteAsset={quoteAsset}
+              priceDecimals={priceDecimals}
+              qtyDecimals={qtyDecimals}
+            />
+            <MarketDepthChart
+              bids={book.bids}
+              asks={book.asks}
+              baseAsset={baseAsset}
+              spreadPct={book.spreadPct}
+              buyPressure={book.buyPressure}
+              sellPressure={book.sellPressure}
+            />
+          </>
+        ) : null}
       </ScrollView>
     </View>
   );

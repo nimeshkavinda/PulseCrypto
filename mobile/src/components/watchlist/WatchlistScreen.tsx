@@ -9,22 +9,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
-import { PairMetadata } from '@pulsecrypto/shared';
+import { PairMetadata, SupportedPairSymbol } from '@pulsecrypto/shared';
 import { colors } from '../../theme/tokens';
 import { usePairsMetadata } from '../../hooks/usePairsMetadata';
 import { useFavorites } from '../../hooks/useFavorites';
-import { useMarketConnection } from '../../hooks/useMarketStream';
+import { useConnectionState, useUpstream } from '../../data/store/hooks';
+import { useStreamRuntime } from '../../data/StreamProvider';
+import { describeStatus } from '../../data/connectionStatus';
 import { MarketPairCard } from './MarketPairCard';
 import { MarketFilterBar } from './MarketFilterBar';
 import { filterAndSortPairs, MarketFilterTab } from './filterUtils';
-import { defaultStorage } from '../../storage/storageRepository';
 import { styles } from './WatchlistScreen.styles';
 
 export function WatchlistScreen() {
   const router = useRouter();
-  const { data: pairs, refetch, isLoading } = usePairsMetadata();
-  const { connectionStatus } = useMarketConnection();
-  const isLive = connectionStatus === 'CONNECTED';
+  const { data: pairs, refetch, isLoading, isError } = usePairsMetadata();
+  const runtime = useStreamRuntime();
+  const isLive = describeStatus(useConnectionState(), useUpstream()).tone === 'live';
   const [favorites, toggleFavorite] = useFavorites();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<MarketFilterTab>('ALL');
@@ -41,14 +42,14 @@ export function WatchlistScreen() {
 
   const handleSelectPair = useCallback(
     (symbol: string) => {
-      defaultStorage.setActivePair(symbol);
+      runtime.setActivePair(symbol as SupportedPairSymbol);
       router.navigate({ pathname: '/', params: { symbol } });
     },
-    [router]
+    [router, runtime]
   );
 
   const displayedPairs = useMemo(
-    () => filterAndSortPairs(pairs, searchQuery, activeTab, favorites),
+    () => filterAndSortPairs(pairs ?? [], searchQuery, activeTab, favorites),
     [pairs, searchQuery, activeTab, favorites]
   );
 
@@ -58,7 +59,7 @@ export function WatchlistScreen() {
         item={item}
         isFavorite={favorites.includes(item.symbol)}
         isLive={isLive}
-        onToggleFavorite={toggleFavorite}
+        onToggleFavorite={(symbol) => toggleFavorite(symbol as SupportedPairSymbol)}
         onPress={handleSelectPair}
       />
     ),
@@ -73,6 +74,15 @@ export function WatchlistScreen() {
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color={colors.bidGreen} />
           <Text style={[styles.emptyText, { marginTop: 16 }]}>Loading live market pairs...</Text>
+        </View>
+      );
+    }
+
+    if (isError && !pairs) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Markets Unavailable</Text>
+          <Text style={styles.emptyText}>Couldn&rsquo;t load the market list from the gateway. Pull down to retry.</Text>
         </View>
       );
     }
@@ -112,7 +122,7 @@ export function WatchlistScreen() {
         <View>
           <Text style={styles.headerTitle}>Spot Markets</Text>
           <Text style={styles.headerSubtitle}>
-            {displayedPairs.length} active streaming pairs
+            {pairs ? `${displayedPairs.length} pairs` : 'Loading pairs…'}
           </Text>
         </View>
         <View style={styles.syncBadge}>

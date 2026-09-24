@@ -8,7 +8,8 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "./plugins/withSceneLifecycle"
     ],
     "splash": {
       "backgroundColor": "#0B0E14",

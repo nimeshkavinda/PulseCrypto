@@ -1,58 +1,40 @@
-import { useState, useEffect } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchPairsMetadata, BASELINE_PAIRS_METADATA } from '../api/marketApi';
 import { PairMetadata } from '@pulsecrypto/shared';
-import { defaultStorage } from '../storage/storageRepository';
+import { fetchPairsMetadata } from '../api/marketApi';
+import { currentGatewayConfig } from '../config/gateway';
+import { defaultStorage, STORAGE_KEYS } from '../storage/storageRepository';
 
 export interface UsePairsMetadataResult {
-  data: PairMetadata[];
+  data: PairMetadata[] | undefined;
   isLoading: boolean;
-  isRefetching: boolean;
   isError: boolean;
   error: Error | null;
   refetch: () => Promise<unknown>;
 }
 
+/**
+ * Pair reference data (display names, decimals, trading status, 24h stats) from GET /pairs/meta.
+ * Fetched on demand and on pull-to-refresh; live prices arrive on the WebSocket `tickers` channel.
+ */
 export function usePairsMetadata(): UsePairsMetadataResult {
-  const [gatewayUrl, setGatewayUrl] = useState<string>(() => defaultStorage.getHttpGatewayUrl());
-  const [isAppActive, setIsAppActive] = useState<boolean>(() => {
-    try {
-      return AppState.currentState === 'active';
-    } catch {
-      return true;
-    }
-  });
-
-  useEffect(() => {
-    const unsubscribe = defaultStorage.subscribeGatewayUrl(() => {
-      setGatewayUrl(defaultStorage.getHttpGatewayUrl());
-    });
-
-    const subscription = AppState.addEventListener('change', (status: AppStateStatus) => {
-      setIsAppActive(status === 'active');
-    });
-
-    return () => {
-      unsubscribe();
-      subscription.remove();
-    };
-  }, []);
+  const [httpUrl, setHttpUrl] = useState(() => currentGatewayConfig().httpUrl);
+  useEffect(
+    () => defaultStorage.subscribe(STORAGE_KEYS.GATEWAY_URL_OVERRIDE, () => setHttpUrl(currentGatewayConfig().httpUrl)),
+    []
+  );
 
   const query = useQuery({
-    queryKey: ['pairsMetadata', gatewayUrl],
-    queryFn: () => fetchPairsMetadata(gatewayUrl),
-    staleTime: 5000,
-    // When the app is in the background, pause 10s REST polling to prevent radio wakeups
-    refetchInterval: isAppActive ? 10000 : false,
-    refetchOnWindowFocus: false,
-    initialData: BASELINE_PAIRS_METADATA,
+    queryKey: ['pairsMetadata', httpUrl],
+    queryFn: () => fetchPairsMetadata(httpUrl),
+    staleTime: 60_000,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
   });
 
   return {
-    data: query.data ?? BASELINE_PAIRS_METADATA,
+    data: query.data,
     isLoading: query.isLoading,
-    isRefetching: query.isRefetching,
     isError: query.isError,
     error: query.error as Error | null,
     refetch: query.refetch,

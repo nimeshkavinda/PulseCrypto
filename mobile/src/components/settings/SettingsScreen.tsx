@@ -1,69 +1,46 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  Switch,
-  PanResponder,
-  LayoutChangeEvent,
-  Alert,
-} from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, PanResponder, LayoutChangeEvent, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../../hooks/useSettings';
-import { useMarketConnection } from '../../hooks/useMarketStream';
+import { useConnection, useUpstream } from '../../data/store/hooks';
+import { useStreamRuntime } from '../../data/StreamProvider';
+import { describeStatus } from '../../data/connectionStatus';
+import { currentGatewayConfig } from '../../config/gateway';
+import { defaultStorage, STORAGE_KEYS } from '../../storage/storageRepository';
 import { colors } from '../../theme/tokens';
+import { STORAGE_ENGINE_LABEL } from '../../storage/engineLabel';
 import { styles } from './SettingsScreen.styles';
 
-const PRESETS = [50, 100, 250, 500, 1000];
-
-/** Convert a throttle ms value [10..1000] to a ratio [0..1] */
-function msToRatio(ms: number): number {
-  return Math.max(0, Math.min(1, (ms - 10) / 990));
-}
-
-/** Convert a ratio [0..1] to a throttle ms value [10..1000], rounded to 10ms */
-function ratioToMs(ratio: number): number {
-  const rawMs = 10 + ratio * 990;
-  return Math.round(rawMs / 10) * 10;
-}
+const MAX_CADENCE_MS = 1000;
+const PRESETS = [100, 250, 500, 1000];
 
 export function SettingsScreen() {
-  const {
-    throttleMs,
-    gatewayUrl,
-    compressionEnabled,
-    adaptivePollingEnabled,
-    storageStats,
-    setThrottle,
-    setGatewayUrl,
-    setCompression,
-    setAdaptivePolling,
-    resetDefaults,
-    clearCache,
-  } = useSettings();
+  const settings = useSettings();
+  const connection = useConnection();
+  const upstream = useUpstream();
+  const runtime = useStreamRuntime();
+  const status = describeStatus(connection.state, upstream);
 
-  const { connectionStatus, reconnect } = useMarketConnection();
+  // The gateway advertises its tick (the fastest cadence) in `hello`; 100 ms until known.
+  const minMs = connection.minCadenceMs ?? 100;
+  const step = minMs;
+  const preferredMs = settings.cadenceMs ?? minMs;
+  const effectiveMs = connection.cadenceMs ?? connection.tickMs;
 
-  const [inputUrl, setInputUrl] = useState<string>(gatewayUrl);
-  const [sliderWidth, setSliderWidth] = useState<number>(0);
-  const trackRef = useRef<View>(null);
+  const msToRatio = useCallback((ms: number) => Math.max(0, Math.min(1, (ms - minMs) / (MAX_CADENCE_MS - minMs))), [minMs]);
+  const ratioToMs = useCallback(
+    (ratio: number) => Math.round((minMs + ratio * (MAX_CADENCE_MS - minMs)) / step) * step,
+    [minMs, step]
+  );
 
-  // Local drag state: while dragging, displayMs tracks finger position without
-  // triggering storage writes or network commands. Only committed on release.
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragMs, setDragMs] = useState(throttleMs);
-  const displayMs = isDragging ? dragMs : throttleMs;
+  const [sliderWidth, setSliderWidth] = useState(0);
+  const [dragMs, setDragMs] = useState<number | null>(null);
+  const displayMs = dragMs ?? preferredMs;
+  const thumbPosition = sliderWidth > 0 ? msToRatio(displayMs) * sliderWidth : 0;
 
-  // Refs for PanResponder to always read current values without stale closures
-  const sliderWidthRef = useRef(sliderWidth);
-  sliderWidthRef.current = sliderWidth;
-  const setThrottleRef = useRef(setThrottle);
-  setThrottleRef.current = setThrottle;
-
-  const currentRatio = msToRatio(displayMs);
-  const thumbPosition = sliderWidth > 0 ? currentRatio * sliderWidth : 0;
+  // Refs so the PanResponder (created once) always sees current values.
+  const latest = useRef({ sliderWidth, ratioToMs, setCadence: settings.setCadence, minMs });
+  latest.current = { sliderWidth, ratioToMs, setCadence: settings.setCadence, minMs };
 
   const panResponder = useMemo(
     () =>
@@ -72,78 +49,56 @@ export function SettingsScreen() {
         onMoveShouldSetPanResponder: () => true,
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (evt) => {
-          const w = sliderWidthRef.current;
-          if (w <= 0) return;
-          const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / w));
-          setDragMs(ratioToMs(ratio));
-          setIsDragging(true);
+          const { sliderWidth: w, ratioToMs: toMs } = latest.current;
+          if (w > 0) setDragMs(toMs(evt.nativeEvent.locationX / w));
         },
         onPanResponderMove: (evt) => {
-          const w = sliderWidthRef.current;
-          if (w <= 0) return;
-          const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / w));
-          setDragMs(ratioToMs(ratio));
+          const { sliderWidth: w, ratioToMs: toMs } = latest.current;
+          if (w > 0) setDragMs(toMs(Math.max(0, Math.min(1, evt.nativeEvent.locationX / w))));
         },
         onPanResponderRelease: (evt) => {
-          const w = sliderWidthRef.current;
+          const { sliderWidth: w, ratioToMs: toMs, setCadence, minMs: min } = latest.current;
           if (w > 0) {
-            const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / w));
-            const finalMs = ratioToMs(ratio);
-            setThrottleRef.current(finalMs);
+            const ms = toMs(Math.max(0, Math.min(1, evt.nativeEvent.locationX / w)));
+            // Committed only on release: one cadence request per gesture, not per pixel.
+            setCadence(ms <= min ? null : ms);
           }
-          setIsDragging(false);
+          setDragMs(null);
         },
-        onPanResponderTerminate: () => {
-          setIsDragging(false);
-        },
+        onPanResponderTerminate: () => setDragMs(null),
       }),
     []
   );
 
   const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
-    if (w > 0) {
-      setSliderWidth(w);
-    }
+    if (w > 0) setSliderWidth(w);
   }, []);
 
-  const handleSaveGateway = () => {
+  const [inputUrl, setInputUrl] = useState(() => settings.gatewayOverride ?? currentGatewayConfig().wsUrl);
+
+  const applyGateway = () => {
     const trimmed = inputUrl.trim();
-    if (!trimmed.startsWith('ws://') && !trimmed.startsWith('wss://')) {
+    if (!/^wss?:\/\//.test(trimmed)) {
       Alert.alert('Invalid URL', 'Gateway URL must start with ws:// or wss://');
       return;
     }
-    setGatewayUrl(trimmed);
-    reconnect();
-    Alert.alert('Gateway Updated', 'Reconnecting to new gateway endpoint...');
+    settings.setGatewayOverride(trimmed);
   };
 
-  const handleResetDefaults = () => {
-    resetDefaults();
-    setInputUrl(gatewayUrl);
-    Alert.alert('Defaults Restored', 'All settings restored to baseline configuration.');
-  };
-
-  const handleClearCache = () => {
-    clearCache();
-    Alert.alert('Cache Cleared', 'MMKV storage cache and temporary buffers cleared.');
+  const useDefaultGateway = () => {
+    settings.setGatewayOverride(null);
+    setInputUrl(currentGatewayConfig().wsUrl);
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      scrollEnabled={!isDragging}
-    >
-      {/* Header */}
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} scrollEnabled={dragMs === null}>
       <View style={styles.header}>
         <Text style={styles.screenTitle}>System Settings &amp; Telemetry</Text>
-        <Text style={styles.screenSubtitle}>
-          Real-time performance monitoring and data ingestion controls.
-        </Text>
+        <Text style={styles.screenSubtitle}>Stream cadence, connection and on-device data.</Text>
       </View>
 
-      {/* Card 1: Network Control (Data Throttling Configurator) */}
+      {/* Stream cadence */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View>
@@ -153,163 +108,153 @@ export function SettingsScreen() {
           <Ionicons name="speedometer-outline" size={22} color={colors.textSecondary} />
         </View>
 
-        {/* Update Frequency readout */}
         <View style={styles.frequencyRow}>
           <Text style={styles.frequencyLabel}>Update Frequency</Text>
           <Text style={styles.frequencyValue}>{displayMs}ms</Text>
         </View>
 
-        {/* Interactive Slider Track with enlarged hit area */}
         <View style={styles.sliderContainer}>
-          <View style={styles.sliderHitArea} {...panResponder.panHandlers}>
-            <View
-              ref={trackRef}
-              style={styles.track}
-              onLayout={handleTrackLayout}
-              pointerEvents="none"
-            >
+          <View
+            style={styles.sliderHitArea}
+            {...panResponder.panHandlers}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Update frequency"
+            accessibilityValue={{ min: minMs, max: MAX_CADENCE_MS, now: displayMs, text: `${displayMs} milliseconds` }}
+          >
+            <View style={styles.track} onLayout={handleTrackLayout} pointerEvents="none">
               <View style={[styles.filledTrack, { width: thumbPosition }]} />
               <View style={[styles.thumb, { left: thumbPosition }]} />
             </View>
           </View>
           <View style={styles.sliderLabels}>
-            <Text style={styles.sliderRangeText}>10ms</Text>
-            <Text style={styles.sliderRangeText}>500ms</Text>
-            <Text style={styles.sliderRangeText}>1000ms</Text>
+            <Text style={styles.sliderRangeText}>{minMs}ms</Text>
+            <Text style={styles.sliderRangeText}>{Math.round((minMs + MAX_CADENCE_MS) / 2 / step) * step}ms</Text>
+            <Text style={styles.sliderRangeText}>{MAX_CADENCE_MS}ms</Text>
           </View>
         </View>
 
-        {/* Preset buttons */}
         <View style={styles.presetsRow}>
-          {PRESETS.map((p) => {
-            const isActive = displayMs === p;
-            return (
-              <TouchableOpacity
-                key={p}
-                style={[styles.presetPill, isActive && styles.presetPillActive]}
-                onPress={() => setThrottle(p)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.presetText, isActive && styles.presetTextActive]}>
-                  {p}ms
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {PRESETS.filter((p) => p >= minMs).map((p) => (
+            <TouchableOpacity
+              key={p}
+              style={[styles.presetPill, displayMs === p && styles.presetPillActive]}
+              onPress={() => settings.setCadence(p <= minMs ? null : p)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.presetText, displayMs === p && styles.presetTextActive]}>{p}ms</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Applied by gateway</Text>
+          <Text style={styles.statValue}>{effectiveMs ? `${effectiveMs}ms` : '—'}</Text>
         </View>
 
         <View style={styles.divider} />
 
-        {/* Toggle 1: Binary Protocol Compression */}
         <View style={styles.toggleRow}>
           <Text style={styles.toggleLabel}>Binary Protocol Compression</Text>
           <Switch
-            value={compressionEnabled}
-            onValueChange={setCompression}
+            value={settings.compressionEnabled}
+            onValueChange={settings.setCompression}
             trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: colors.bidGreen }}
             thumbColor="#FFFFFF"
           />
         </View>
-
-        {/* Toggle 2: Adaptive Polling Strategy */}
         <View style={styles.toggleRow}>
           <Text style={styles.toggleLabel}>Adaptive Polling Strategy</Text>
           <Switch
-            value={adaptivePollingEnabled}
-            onValueChange={setAdaptivePolling}
+            value={settings.adaptivePollingEnabled}
+            onValueChange={settings.setAdaptivePolling}
             trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: colors.bidGreen }}
             thumbColor="#FFFFFF"
           />
         </View>
       </View>
 
-      {/* Card 2: Gateway Connection Configuration */}
+      {/* Connection */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={[styles.cardCategory, { color: colors.accentBlue }]}>
-              GATEWAY CONNECTION
-            </Text>
-            <Text style={styles.cardTitle}>Endpoint Configuration</Text>
+            <Text style={[styles.cardCategory, { color: colors.accentBlue }]}>GATEWAY CONNECTION</Text>
+            <Text style={styles.cardTitle}>Endpoint</Text>
           </View>
           <Ionicons name="link-outline" size={22} color={colors.accentBlue} />
         </View>
 
-        <Text style={styles.inputLabel}>WebSocket Gateway URL</Text>
-        <TextInput
-          style={styles.textInput}
-          value={inputUrl}
-          onChangeText={setInputUrl}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="ws://localhost:8080/ws"
-          placeholderTextColor={colors.textSecondary}
-        />
-
         <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Connection Status</Text>
-          <Text
-            style={[
-              styles.statValue,
-              { color: connectionStatus === 'CONNECTED' ? colors.bidGreen : colors.warningYellow },
-            ]}
-          >
-            {connectionStatus}
+          <Text style={styles.statLabel}>Status</Text>
+          <Text style={[styles.statValue, { color: status.tone === 'live' ? colors.bidGreen : colors.warningYellow }]}>
+            {status.label}
           </Text>
         </View>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleSaveGateway}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.primaryButtonText}>Apply URL</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={handleResetDefaults}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.secondaryButtonText}>Reset Defaults</Text>
-          </TouchableOpacity>
+        <View style={styles.statRow}>
+          <Text style={styles.statLabel}>Round trip</Text>
+          <Text style={styles.statValue}>{connection.rttMs !== null ? `${connection.rttMs}ms` : '—'}</Text>
         </View>
+
+        {__DEV__ ? (
+          <>
+            <Text style={styles.inputLabel}>WebSocket Gateway URL (development builds only)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={inputUrl}
+              onChangeText={setInputUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="ws://localhost:8080/ws"
+              placeholderTextColor={colors.textSecondary}
+            />
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.primaryButton} onPress={applyGateway} activeOpacity={0.7}>
+                <Text style={styles.primaryButtonText}>Apply URL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={useDefaultGateway} activeOpacity={0.7}>
+                <Text style={styles.secondaryButtonText}>Use Default</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
+
+        <TouchableOpacity style={styles.secondaryButton} onPress={() => runtime.client.reconnectNow()} activeOpacity={0.7}>
+          <Text style={styles.secondaryButtonText}>Reconnect Now</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Card 3: Storage & Cache Management */}
+      {/* Storage */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={[styles.cardCategory, { color: colors.textSecondary }]}>
-              STORAGE &amp; CACHE
-            </Text>
-            <Text style={styles.cardTitle}>Persistence Management</Text>
+            <Text style={[styles.cardCategory, { color: colors.textSecondary }]}>STORAGE &amp; CACHE</Text>
+            <Text style={styles.cardTitle}>On-device Data</Text>
           </View>
           <Ionicons name="server-outline" size={22} color={colors.textSecondary} />
         </View>
-
         <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Storage Cache Footprint</Text>
+          <Text style={styles.statLabel}>Storage</Text>
           <Text style={styles.statValue}>
-            {storageStats.isMeasured
-              ? `${storageStats.estimatedKb > 0 ? `${storageStats.estimatedKb} KB` : '<1 KB'} utilized (${storageStats.isNative ? 'MMKV' : 'In-Memory'})`
-              : 'Unavailable'}
+            {STORAGE_ENGINE_LABEL[settings.storageStats.engine]}
           </Text>
         </View>
         <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Active Stored Keys</Text>
+          <Text style={styles.statLabel}>Stored keys / size</Text>
           <Text style={styles.statValue}>
-            {storageStats.isMeasured ? `${storageStats.keysCount} keys` : 'Unavailable'}
+            {settings.storageStats.keysCount} keys · {(settings.storageStats.estimatedBytes / 1024).toFixed(1)} KB
           </Text>
         </View>
-
-        <TouchableOpacity
-          style={styles.dangerButton}
-          onPress={handleClearCache}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.dangerButtonText}>Clear Storage Cache</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => defaultStorage.delete(STORAGE_KEYS.MARKET_SNAPSHOT)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.secondaryButtonText}>Clear Cached Prices</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dangerButton} onPress={settings.resetDefaults} activeOpacity={0.7}>
+            <Text style={styles.dangerButtonText}>Reset Preferences</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );

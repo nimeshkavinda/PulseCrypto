@@ -1,33 +1,31 @@
 import React, { useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useMarketConnection } from '../../hooks/useMarketStream';
+import { useIsFocused } from 'expo-router';
 import { useSettings } from '../../hooks/useSettings';
+import { useConnection, useUpstream } from '../../data/store/hooks';
+import { useStreamStats } from '../../data/useStreamStats';
+import { describeStatus } from '../../data/connectionStatus';
+import { currentGatewayConfig } from '../../config/gateway';
 import { CircularFpsGauge } from './CircularFpsGauge';
 import { MemorySparkline } from './MemorySparkline';
 import { colors } from '../../theme/tokens';
+import { STORAGE_ENGINE_LABEL } from '../../storage/engineLabel';
 import { styles } from './TelemetryScreen.styles';
 
 export function TelemetryScreen() {
-  const { ingestionRate, latencyMs, resetMetrics, connectionStatus } = useMarketConnection();
-  const { storageStats, gatewayUrl } = useSettings();
+  const isFocused = useIsFocused();
+  const { rates, reset } = useStreamStats(isFocused);
+  const connection = useConnection();
+  const status = describeStatus(connection.state, useUpstream());
+  const { storageStats } = useSettings();
+  const ingestionRate = rates.framesPerSec;
+  const latencyMs = connection.rttMs;
+  const gatewayHost = currentGatewayConfig().wsUrl.replace(/^wss?:\/\//, '').split(/[:/]/)[0] || 'gateway';
 
-  // Extract the host portion from the gateway URL for display (e.g. "192.168.1.6")
-  const gatewayHost = (() => {
-    try {
-      const cleaned = gatewayUrl.replace(/^wss?:\/\//, '');
-      const host = cleaned.split(/[:/]/)[0];
-      return host || 'Local Gateway';
-    } catch {
-      return 'Local Gateway';
-    }
-  })();
+  const handleReset = useCallback(() => reset(), [reset]);
 
-  const handleReset = useCallback(() => {
-    resetMetrics();
-  }, [resetMetrics]);
-
-  const isHealthy = connectionStatus === 'CONNECTED';
+  const isHealthy = status.tone === 'live';
   const isHermes = (() => {
     try {
       const g = global as unknown as { HermesInternal?: unknown };
@@ -78,7 +76,7 @@ export function TelemetryScreen() {
                   !isHealthy && { color: colors.askRed },
                 ]}
               >
-                {isHealthy ? 'HEALTHY' : 'CONNECTING'}
+                {isHealthy ? 'HEALTHY' : status.label}
               </Text>
             </View>
           </View>
@@ -142,7 +140,7 @@ export function TelemetryScreen() {
         <View>
           <Text style={[styles.infoCategory, { color: '#FF6B8B' }]}>API LATENCY</Text>
           <Text style={styles.infoTitle}>
-            Avg Ping: {latencyMs > 0 ? `${latencyMs}ms` : '<1ms'} ({gatewayHost})
+            Round trip: {latencyMs !== null ? `${latencyMs}ms` : '—'} ({gatewayHost})
           </Text>
         </View>
       </View>
@@ -155,9 +153,7 @@ export function TelemetryScreen() {
         <View>
           <Text style={[styles.infoCategory, { color: colors.textSecondary }]}>STORAGE CACHE</Text>
           <Text style={styles.infoTitle}>
-            {storageStats.isMeasured
-              ? `${storageStats.isNative ? 'MMKV Cache' : 'In-Memory Cache'}: ${storageStats.estimatedKb > 0 ? `${storageStats.estimatedKb} KB` : '<1 KB'} utilized`
-              : 'Storage Cache: Unavailable'}
+            {`${STORAGE_ENGINE_LABEL[storageStats.engine]}: ${(storageStats.estimatedBytes / 1024).toFixed(1)} KB, ${storageStats.keysCount} keys`}
           </Text>
         </View>
       </View>

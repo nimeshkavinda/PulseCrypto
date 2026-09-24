@@ -1,96 +1,47 @@
-import { useState, useEffect, useCallback } from 'react';
-import { defaultStorage, StorageStats } from '../storage/storageRepository';
+import { useCallback, useEffect, useState } from 'react';
+import { defaultStorage, StorageStats, STORAGE_KEYS } from '../storage/storageRepository';
 
 export interface UseSettingsResult {
-  throttleMs: number;
-  gatewayUrl: string;
+  /** User-preferred cadence in ms, or null for the gateway default. */
+  cadenceMs: number | null;
+  gatewayOverride: string | null;
   compressionEnabled: boolean;
   adaptivePollingEnabled: boolean;
   storageStats: StorageStats;
-  setThrottle: (intervalMs: number) => void;
-  setGatewayUrl: (url: string) => void;
+  setCadence: (ms: number | null) => void;
+  setGatewayOverride: (url: string | null) => void;
   setCompression: (enabled: boolean) => void;
   setAdaptivePolling: (enabled: boolean) => void;
   resetDefaults: () => void;
-  clearCache: () => void;
 }
 
+const read = () => ({
+  cadenceMs: defaultStorage.getCadenceMs(),
+  gatewayOverride: defaultStorage.getGatewayOverride(),
+  compressionEnabled: defaultStorage.getBinaryCompression(),
+  adaptivePollingEnabled: defaultStorage.getAdaptivePolling(),
+  storageStats: defaultStorage.getStorageStats(),
+});
+
+/** User preferences backed by storage; re-reads whenever any key changes. */
 export function useSettings(): UseSettingsResult {
-  const [throttleMs, setThrottleState] = useState<number>(() => defaultStorage.getClientThrottle());
-  const [gatewayUrl, setGatewayUrlState] = useState<string>(() => defaultStorage.getGatewayUrl());
-  const [compressionEnabled, setCompressionState] = useState<boolean>(() => defaultStorage.getBinaryCompression());
-  const [adaptivePollingEnabled, setAdaptivePollingState] = useState<boolean>(() => defaultStorage.getAdaptivePolling());
-  const [storageStats, setStorageStats] = useState(() => defaultStorage.getStorageStats());
+  const [state, setState] = useState(read);
 
-  useEffect(() => {
-    const unsubThrottle = defaultStorage.subscribeClientThrottle((ms) => {
-      setThrottleState(ms);
-    });
-    const unsubGateway = defaultStorage.subscribeGatewayUrl((url) => {
-      setGatewayUrlState(url);
-    });
-    // Re-read storage stats whenever any key is written/deleted
-    const unsubStorageChange = defaultStorage.subscribeStorageChange(() => {
-      setStorageStats(defaultStorage.getStorageStats());
-    });
-
-    return () => {
-      unsubThrottle();
-      unsubGateway();
-      unsubStorageChange();
-    };
-  }, []);
-
-  const setThrottle = useCallback((intervalMs: number) => {
-    defaultStorage.setClientThrottle(intervalMs);
-    setThrottleState(intervalMs);
-  }, []);
-
-  const setGatewayUrl = useCallback((url: string) => {
-    defaultStorage.setGatewayUrl(url);
-    setGatewayUrlState(url);
-  }, []);
-
-  const setCompression = useCallback((enabled: boolean) => {
-    defaultStorage.setBinaryCompression(enabled);
-    setCompressionState(enabled);
-  }, []);
-
-  const setAdaptivePolling = useCallback((enabled: boolean) => {
-    defaultStorage.setAdaptivePolling(enabled);
-    setAdaptivePollingState(enabled);
-  }, []);
-
-  const resetDefaults = useCallback(() => {
-    defaultStorage.resetDefaults();
-    setThrottleState(defaultStorage.getClientThrottle());
-    setGatewayUrlState(defaultStorage.getGatewayUrl());
-    setCompressionState(defaultStorage.getBinaryCompression());
-    setAdaptivePollingState(defaultStorage.getAdaptivePolling());
-    setStorageStats(defaultStorage.getStorageStats());
-  }, []);
-
-  const clearCache = useCallback(() => {
-    defaultStorage.clearAll();
-    defaultStorage.resetDefaults();
-    setThrottleState(defaultStorage.getClientThrottle());
-    setGatewayUrlState(defaultStorage.getGatewayUrl());
-    setCompressionState(defaultStorage.getBinaryCompression());
-    setAdaptivePollingState(defaultStorage.getAdaptivePolling());
-    setStorageStats(defaultStorage.getStorageStats());
-  }, []);
+  // The market snapshot is rewritten every few seconds; it is not a preference, so ignore it.
+  useEffect(
+    () =>
+      defaultStorage.subscribeAll((key) => {
+        if (key !== STORAGE_KEYS.MARKET_SNAPSHOT) setState(read());
+      }),
+    []
+  );
 
   return {
-    throttleMs,
-    gatewayUrl,
-    compressionEnabled,
-    adaptivePollingEnabled,
-    storageStats,
-    setThrottle,
-    setGatewayUrl,
-    setCompression,
-    setAdaptivePolling,
-    resetDefaults,
-    clearCache,
+    ...state,
+    setCadence: useCallback((ms: number | null) => defaultStorage.setCadenceMs(ms), []),
+    setGatewayOverride: useCallback((url: string | null) => defaultStorage.setGatewayOverride(url), []),
+    setCompression: useCallback((enabled: boolean) => defaultStorage.setBinaryCompression(enabled), []),
+    setAdaptivePolling: useCallback((enabled: boolean) => defaultStorage.setAdaptivePolling(enabled), []),
+    resetDefaults: useCallback(() => defaultStorage.resetDefaults(), []),
   };
 }

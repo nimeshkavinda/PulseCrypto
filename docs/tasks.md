@@ -105,10 +105,10 @@ _Improvements from end-to-end testing: cut per-client bandwidth, send only what 
 - [x] **T10.6**: A load-test harness (`backend/scripts/loadtest.ts`) with published results.
 
 ## Phase 11: Mobile Connection Reliability & Render Performance
-- [ ] **T11.1**: `MarketStreamClient`, framework-agnostic: a connection state machine with full-jitter backoff, heartbeat, NetInfo/AppState integration and resubscribe on reconnect.
-- [ ] **T11.2**: An external market store with per-pair selectors and frame-batched commits.
-- [ ] **T11.3**: Gateway configuration precedence: app config, then env, then platform default. User overrides are persisted.
-- [ ] **T11.4**: A jest-expo + React Native Testing Library suite covering the state machine and render isolation.
+- [x] **T11.1**: `MarketStreamClient`, framework-agnostic: a connection state machine with full-jitter backoff, heartbeat, NetInfo/AppState integration and resubscribe on reconnect.
+- [x] **T11.2**: An external market store with per-pair selectors and frame-batched commits.
+- [x] **T11.3**: Gateway configuration precedence: app config, then env, then platform default. User overrides are persisted. Persistent storage works in dev builds (MMKV) and in Expo Go (SQLite kv-store fallback).
+- [x] **T11.4**: A jest-expo + React Native Testing Library suite covering the state machine and render isolation.
 
 ## Phase 12: Live Watchlist & Terminal Improvements
 - [ ] **T12.1**: Watchlist rows bound to the `tickers` channel, with a per-row price flash and a freshness indicator. REST is used for static metadata and pull-to-refresh.
@@ -127,6 +127,6 @@ _Improvements from end-to-end testing: cut per-client bandwidth, send only what 
 - [ ] **T14.3**: Android frame-stats capture under a sustained burst, and the gateway load-test results.
 
 ## Phase 15: Documentation Updates & Deliverables
-- [ ] **T15.1**: Update the README to match the final implementation: architecture, protocol, buffering strategy, ADRs, scaling analysis, assumptions, trade-offs and AI workflow.
+- [ ] **T15.1**: Update the README to match the final implementation: architecture, protocol, buffering strategy, ADRs, scaling analysis, assumptions, trade-offs and AI workflow. The run instructions cover the dev build (primary) and Expo Go (secondary fallback: SQLite-backed storage, no MMKV), plus `EXPO_PUBLIC_GATEWAY_URL` for physical devices.
 - [ ] **T15.2**: Repository default branch and a fresh-clone verification.
 - [ ] **T15.3**: Screen recording (T8.2).

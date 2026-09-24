@@ -1,23 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
-import { defaultStorage } from '../storage/storageRepository';
+import { useCallback, useSyncExternalStore } from 'react';
+import { SupportedPairSymbol } from '@pulsecrypto/shared';
+import { defaultStorage, StorageRepository, STORAGE_KEYS } from '../storage/storageRepository';
 
-/**
- * Reactive React hook for MMKV-persisted favourites.
- * Subscribes to storage updates across tabs and drawer components.
- */
-export function useFavorites(): [string[], (symbol: string) => boolean] {
-  const [favorites, setFavorites] = useState<string[]>(() => defaultStorage.getFavorites());
-
-  useEffect(() => {
-    setFavorites(defaultStorage.getFavorites());
-    return defaultStorage.subscribeFavorites((updated) => {
-      setFavorites(updated);
-    });
-  }, []);
-
-  const toggleFavorite = useCallback((symbol: string) => {
-    return defaultStorage.toggleFavorite(symbol);
-  }, []);
-
-  return [favorites, toggleFavorite];
+/** Favourites persisted in MMKV, shared live across every screen that uses them. */
+export function useFavorites(
+  storage: StorageRepository = defaultStorage
+): [SupportedPairSymbol[], (symbol: SupportedPairSymbol) => boolean] {
+  const subscribe = useCallback((cb: () => void) => storage.subscribe(STORAGE_KEYS.FAVORITES, cb), [storage]);
+  // Snapshot is the serialized list (a primitive), so unchanged favourites never re-render.
+  const read = useCallback(() => storage.getFavorites().join(','), [storage]);
+  const serialized = useSyncExternalStore(subscribe, read);
+  const favorites = serialized ? (serialized.split(',') as SupportedPairSymbol[]) : [];
+  const toggle = useCallback((symbol: SupportedPairSymbol) => storage.toggleFavorite(symbol), [storage]);
+  return [favorites, toggle];
 }

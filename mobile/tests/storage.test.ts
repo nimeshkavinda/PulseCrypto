@@ -1,127 +1,70 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { StorageRepository, DEFAULT_FAVORITES, DEFAULT_THROTTLE_MS } from '../src/storage/storageRepository';
+import { DEFAULT_FAVORITES, InMemoryStorageBackend, StorageRepository, STORAGE_KEYS } from '../src/storage/storageRepository';
 
-describe('StorageRepository Synchronous Persistence (Task T3.4)', () => {
-  let storage: StorageRepository;
+describe('StorageRepository', () => {
+  it('uses MMKV (createMMKV) when the native module is available, and persists across instances', () => {
+    const a = new StorageRepository();
+    expect(a.isPersistent()).toBe(true);
+    a.setFavorites(['SOLUSDT', 'XRPUSDT']);
 
-  beforeEach(() => {
-    storage = new StorageRepository();
-    storage.clearAll();
+    const b = new StorageRepository(); // simulates an app restart on the same MMKV instance
+    expect(b.getFavorites()).toEqual(['SOLUSDT', 'XRPUSDT']);
+    b.clearAll();
   });
 
-  it('should return default favorites when no favorites are saved', () => {
-    const favorites = storage.getFavorites();
-    expect(favorites).toEqual(DEFAULT_FAVORITES);
+  it('reports in-memory storage as not persistent', () => {
+    expect(new StorageRepository(new InMemoryStorageBackend()).isPersistent()).toBe(false);
   });
 
-  it('should persist and retrieve custom favorites list', () => {
-    storage.setFavorites(['DOGEUSDT', 'XRPUSDT']);
-    expect(storage.getFavorites()).toEqual(['DOGEUSDT', 'XRPUSDT']);
+  it('defaults favourites, toggles them, and filters unknown symbols', () => {
+    const s = new StorageRepository(new InMemoryStorageBackend());
+    expect(s.getFavorites()).toEqual(DEFAULT_FAVORITES);
+    expect(s.toggleFavorite('BTCUSDT')).toBe(false);
+    expect(s.toggleFavorite('DOGEUSDT')).toBe(true);
+    expect(s.getFavorites()).toEqual(['ETHUSDT', 'SOLUSDT', 'DOGEUSDT']);
+    s.set(STORAGE_KEYS.FAVORITES, ['BTCUSDT', 'NOPE']);
+    expect(s.getFavorites()).toEqual(['BTCUSDT']);
   });
 
-  it('should allow empty favorites list and not revert to defaults', () => {
-    storage.setFavorites([]);
-    expect(storage.getFavorites()).toEqual([]);
+  it('never writes a gateway default, so env configuration is not shadowed', () => {
+    const s = new StorageRepository(new InMemoryStorageBackend());
+    expect(s.getGatewayOverride()).toBeNull();
+    s.setGatewayOverride('ws://x/ws');
+    expect(s.getGatewayOverride()).toBe('ws://x/ws');
+    s.setGatewayOverride(null);
+    expect(s.getGatewayOverride()).toBeNull();
   });
 
-  it('should toggle favorites accurately', () => {
-    // Start with default ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
-    expect(storage.isFavorite('BTCUSDT')).toBe(true);
-
-    // Toggle off
-    const isNowFav = storage.toggleFavorite('BTCUSDT');
-    expect(isNowFav).toBe(false);
-    expect(storage.isFavorite('BTCUSDT')).toBe(false);
-
-    // Toggle on
-    const isFavAgain = storage.toggleFavorite('BTCUSDT');
-    expect(isFavAgain).toBe(true);
-    expect(storage.isFavorite('BTCUSDT')).toBe(true);
+  it('removes keys written by earlier app versions on startup', () => {
+    const backend = new InMemoryStorageBackend();
+    backend.set('pulse_gateway_url', '"ws://old/ws"');
+    backend.set('pulse_cached_payloads', '{}');
+    new StorageRepository(backend);
+    expect(backend.getAllKeys()).toEqual([]);
   });
 
-  it('should clamp and persist client throttle interval (10ms - 1000ms)', () => {
-    expect(storage.getClientThrottle()).toBe(DEFAULT_THROTTLE_MS);
-
-    storage.setClientThrottle(250);
-    expect(storage.getClientThrottle()).toBe(250);
-
-    // Clamp below 10
-    storage.setClientThrottle(2);
-    expect(storage.getClientThrottle()).toBe(10);
-
-    // Clamp above 1000
-    storage.setClientThrottle(5000);
-    expect(storage.getClientThrottle()).toBe(1000);
+  it('validates stored values and restores defaults', () => {
+    const s = new StorageRepository(new InMemoryStorageBackend());
+    s.set(STORAGE_KEYS.ACTIVE_PAIR, 'NOPE');
+    expect(s.getActivePair()).toBe('BTCUSDT');
+    s.setCadenceMs(250);
+    expect(s.getCadenceMs()).toBe(250);
+    s.resetDefaults();
+    expect(s.getCadenceMs()).toBeNull();
   });
 
-  it('should handle generic key-value serialization and deletion', () => {
-    storage.set('test_key', { hello: 'world', count: 42 });
-    expect(storage.get('test_key')).toEqual({ hello: 'world', count: 42 });
-
-    storage.delete('test_key');
-    expect(storage.get('test_key')).toBeNull();
-  });
-
-  it('should retrieve default gateway URL when unset', () => {
-    const originalEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
-    delete process.env.EXPO_PUBLIC_GATEWAY_URL;
-    try {
-      // In Node/Vitest, Platform is unavailable so default falls back to localhost
-      expect(storage.getGatewayUrl()).toBe('ws://localhost:8080/ws');
-    } finally {
-      if (originalEnv !== undefined) {
-        process.env.EXPO_PUBLIC_GATEWAY_URL = originalEnv;
-      }
-    }
-  });
-
-  it('should prioritize EXPO_PUBLIC_GATEWAY_URL env variable over default when unset in storage', () => {
-    const originalEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
-    try {
-      process.env.EXPO_PUBLIC_GATEWAY_URL = 'ws://192.168.1.100:8080/ws';
-      expect(storage.getGatewayUrl()).toBe('ws://192.168.1.100:8080/ws');
-    } finally {
-      if (originalEnv !== undefined) {
-        process.env.EXPO_PUBLIC_GATEWAY_URL = originalEnv;
-      } else {
-        delete process.env.EXPO_PUBLIC_GATEWAY_URL;
-      }
-    }
-  });
-
-  it('should prioritize explicit storage override over EXPO_PUBLIC_GATEWAY_URL and default', () => {
-    const originalEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
-    try {
-      process.env.EXPO_PUBLIC_GATEWAY_URL = 'ws://192.168.1.100:8080/ws';
-      storage.setGatewayUrl('ws://custom-domain.com:8080/ws');
-      expect(storage.getGatewayUrl()).toBe('ws://custom-domain.com:8080/ws');
-    } finally {
-      if (originalEnv !== undefined) {
-        process.env.EXPO_PUBLIC_GATEWAY_URL = originalEnv;
-      } else {
-        delete process.env.EXPO_PUBLIC_GATEWAY_URL;
-      }
-    }
-  });
-
-  it('should notify subscribers when favorites change via setFavorites or toggleFavorite', () => {
-    const notifications: string[][] = [];
-    const unsubscribe = storage.subscribeFavorites((updated) => {
-      notifications.push(updated);
-    });
-
-    storage.setFavorites(['BTCUSDT']);
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toEqual(['BTCUSDT']);
-
-    storage.toggleFavorite('SOLUSDT');
-    expect(notifications).toHaveLength(2);
-    expect(notifications[1]).toEqual(['BTCUSDT', 'SOLUSDT']);
-
-    unsubscribe();
-
-    storage.toggleFavorite('BTCUSDT');
-    // Notification count should not increase after unsubscribe
-    expect(notifications).toHaveLength(2);
+  it('notifies key subscribers asynchronously (never during a render)', async () => {
+    const s = new StorageRepository(new InMemoryStorageBackend());
+    const favs = jest.fn();
+    const any = jest.fn();
+    s.subscribe(STORAGE_KEYS.FAVORITES, favs);
+    s.subscribeAll(any);
+    s.setFavorites(['BTCUSDT']);
+    expect(favs).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(favs).toHaveBeenCalledTimes(1);
+    expect(any).toHaveBeenCalledWith(STORAGE_KEYS.FAVORITES);
+    s.setCadenceMs(100);
+    await Promise.resolve();
+    expect(favs).toHaveBeenCalledTimes(1);
   });
 });
