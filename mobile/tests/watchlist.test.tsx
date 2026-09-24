@@ -98,7 +98,7 @@ describe('MarketPairCard (live row)', () => {
     await render(t.wrap(<MarketPairCard row={row('SOLUSDT')} isFavorite onPress={onPress} onToggleFavorite={onToggleFavorite} />));
     const star = screen.getByLabelText('Toggle favourite for SOLUSDT');
     expect(star).toBeChecked();
-    await fireEvent.press(star, { stopPropagation: jest.fn() });
+    await fireEvent.press(star);
     expect(onToggleFavorite).toHaveBeenCalledWith('SOLUSDT');
     expect(onPress).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: /SOL \/ USDT/ }));

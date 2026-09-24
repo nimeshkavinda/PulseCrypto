@@ -57,6 +57,12 @@ export const MemorySparkline = React.memo(function MemorySparkline({ samplesMb, 
       ) : (
         <Text style={styles.note}>Unavailable in Expo Go: the native perf-monitor module is only included in development and release builds.</Text>
       )}
+      {nativeAvailable && __DEV__ ? (
+        <Text style={[styles.note, styles.devNote]}>
+          Development build: React Native&apos;s debug-only instrumentation keeps a record of every UI node created, so this figure climbs under
+          sustained updates. Judge memory on a release build.
+        </Text>
+      ) : null}
     </View>
   );
 });
@@ -68,4 +74,5 @@ const styles = StyleSheet.create({
   memoryValue: { fontFamily: typography.fontFamily.monoMedium, fontSize: 13, color: LINE },
   chartWrapper: { width: '100%', height: HEIGHT, overflow: 'hidden', justifyContent: 'center' },
   note: { fontFamily: typography.fontFamily.regular, fontSize: 12, color: colors.textMuted },
+  devNote: { marginTop: 8 },
 });

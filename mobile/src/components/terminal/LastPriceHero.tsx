@@ -23,10 +23,15 @@ function useNow(enabled: boolean): number {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!enabled) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, [enabled]);
-  return Math.max(now, Date.now());
+  return now;
 }
 
 export const LastPriceHero = React.memo(function LastPriceHero({ pair, ticker, bookUpdatedAt, priceDecimals, baseAsset }: LastPriceHeroProps) {

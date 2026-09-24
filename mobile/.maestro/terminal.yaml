@@ -1,0 +1,23 @@
+# Opening a pair shows its live terminal: price, pressure, spread, order book and depth.
+appId: com.pulsecrypto.mobile
+name: Pair terminal
+tags: [terminal]
+---
+- launchApp
+- tapOn: 'Markets(, tab.*)?'
+- extendedWaitUntil:
+    visible: 'ETH / USDT, \$.*'
+    timeout: 30000
+- tapOn: 'ETH / USDT, .*'
+- assertVisible: ETH / USDT
+- assertVisible: LAST PRICE
+- extendedWaitUntil:
+    visible: 'Buy pressure .* percent'
+    timeout: 15000
+- assertVisible: 'Sell pressure .* percent'
+- assertVisible: SPREAD
+- assertVisible: 'Spread .* USDT, .* percent'
+- scrollUntilVisible:
+    element: MARKET DEPTH
+    direction: DOWN
+    visibilityPercentage: 50

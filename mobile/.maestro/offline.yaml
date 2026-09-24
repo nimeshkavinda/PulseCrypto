@@ -1,0 +1,24 @@
+# Losing connectivity shows the offline banner with the last prices kept on screen;
+# restoring it reconnects without user action. Airplane mode is Android-only in Maestro.
+appId: com.pulsecrypto.mobile
+name: Offline and automatic recovery
+tags: [offline, android-only]
+---
+- launchApp
+- tapOn: 'Markets(, tab.*)?'
+- extendedWaitUntil:
+    visible: 'BTC / USDT, \$.*'
+    timeout: 30000
+- setAirplaneMode: enabled
+# The idle watchdog closes the dead socket within ~15 s; the client then parks offline.
+- extendedWaitUntil:
+    visible: "You're offline.*"
+    timeout: 45000
+- assertVisible: 'BTC / USDT, \$.*'
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    notVisible: "You're offline.*"
+    timeout: 45000
+- extendedWaitUntil:
+    visible: 'Market data status: LIVE'
+    timeout: 30000

@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      android_e2e:
+        description: Build the Android release APK and run the Maestro flows on an emulator
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, lint, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  docker:
+    name: Gateway image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          load: true
+          tags: pulsecrypto-gateway:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The container must start and answer liveness without an upstream (readiness needs Binance).
+      - name: Smoke-run the image
+        run: |
+          docker run -d --name gw -p 8080:8080 pulsecrypto-gateway:ci
+          for i in $(seq 1 20); do curl -fsS localhost:8080/health && exit 0; sleep 1; done
+          docker logs gw; exit 1
+
+  loadtest-smoke:
+    name: Load-test smoke (500 clients)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - name: Run and check
+        run: |
+          npm --prefix backend run loadtest -- --clients 500 --duration 10 --workers 2 | tee loadtest.log
+          node -e '
+            const out = require("fs").readFileSync("loadtest.log", "utf8");
+            const r = JSON.parse(out.slice(out.indexOf("\n{") + 1));
+            console.log({ healthy: r.healthyConnectedAtEnd, fps: r.framesPerHealthyClientPerSec });
+            if (r.framesPerHealthyClientPerSec < 9) throw new Error("healthy clients fell below 9 frames/s");
+          '
+
+  android-e2e:
+    name: Android release + Maestro
+    if: github.event_name == 'workflow_dispatch' && inputs.android_e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npm run build:shared
+      - name: Build release APK (debug-signed, x86_64 for the emulator)
+        working-directory: mobile
+        run: |
+          npx expo prebuild --platform android --no-install
+          cd android && ./gradlew :app:assembleRelease -PreactNativeArchitectures=x86_64
+      # Deterministic synthetic feed on :8080, so the job does not depend on exchange availability.
+      - name: Start the synthetic gateway
+        working-directory: backend
+        run: |
+          PORT=8080 METRICS_PORT=9465 nohup npx tsx scripts/loadtest/server.ts > ../gateway.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS localhost:8080/ready && exit 0; sleep 1; done
+          cat ../gateway.log; exit 1
+      - run: curl -fsSL "https://get.maestro.mobile.dev" | bash
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            adb install mobile/android/app/build/outputs/apk/release/app-release.apk
+            $HOME/.maestro/bin/maestro test mobile/.maestro/ --format junit --output maestro-report.xml
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro
+          path: |
+            maestro-report.xml
+            ~/.maestro/tests/
+            gateway.log

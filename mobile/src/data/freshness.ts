@@ -49,7 +49,9 @@ export function usePairFreshness(
   const connection = useConnectionState();
   const upstream = useUpstream();
   const [now, setNow] = useState(() => Date.now());
-  const freshness = pairFreshness({ pair, connection, upstream, updatedAt, origin, now: Math.max(now, Date.now()) });
+  // `now` only needs to be current for age checks; a timer below advances it exactly when the
+  // data would turn stale. New data (a newer `updatedAt`) is by definition fresh.
+  const freshness = pairFreshness({ pair, connection, upstream, updatedAt, origin, now });
 
   useEffect(() => {
     if (freshness !== 'live' || !updatedAt) return;
