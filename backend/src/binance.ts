@@ -1,73 +1,73 @@
 import WebSocket from 'ws';
 import { SupportedPairSymbol, SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { MetricsRegistry, defaultMetrics } from './metrics.js';
+import { Ticker24h } from './metadata.js';
 
 export interface BinanceConnectorOptions {
-  baseUrl?: string;
+  /** Stream host, e.g. `wss://stream.binance.com:9443` or `wss://data-stream.binance.vision`. */
+  wsBaseUrl?: string;
+  pairs?: SupportedPairSymbol[];
   reconnectInitialDelayMs?: number;
   reconnectMaxDelayMs?: number;
-  heartbeatIntervalMs?: number;
+  /** Terminate and reconnect if no message arrives for this long. Depth alone arrives every 100 ms. */
+  idleTimeoutMs?: number;
   metrics?: MetricsRegistry;
 }
 
-export type DepthUpdateHandler = (
-  symbol: SupportedPairSymbol,
-  bids: [number, number][],
-  asks: [number, number][]
-) => void;
-
-export type TickerUpdateHandler = (
-  updates: Array<{
-    symbol: SupportedPairSymbol;
-    lastPrice: number;
-    openPrice: number;
-    high24h: number;
-    low24h: number;
-    volume24h: number;
-    change24h?: number;
-  }>
-) => void;
-
+export type DepthUpdateHandler = (symbol: SupportedPairSymbol, bids: [number, number][], asks: [number, number][]) => void;
+export type TradeUpdateHandler = (symbol: SupportedPairSymbol, price: number, tradeTs: number) => void;
+export type TickerUpdateHandler = (symbol: SupportedPairSymbol, ticker: Ticker24h) => void;
 export type StatusChangeHandler = (connected: boolean) => void;
 
-export type TradeUpdateHandler = (
-  symbol: SupportedPairSymbol,
-  price: number,
-  isBuyerMaker: boolean
-) => void;
+export const DEFAULT_BINANCE_WS_URL = 'wss://stream.binance.com:9443';
 
+/** Builds the combined-stream URL: `<base>/stream?streams=btcusdt@depth20@100ms/btcusdt@aggTrade/...` */
+export function buildStreamUrl(base: string, pairs: SupportedPairSymbol[]): string {
+  const streams = pairs.flatMap((p) => {
+    const s = p.toLowerCase();
+    return [`${s}@depth20@100ms`, `${s}@aggTrade`, `${s}@ticker`];
+  });
+  return `${base.replace(/\/+$/, '')}/stream?streams=${streams.join('/')}`;
+}
+
+/**
+ * Binance combined-stream client for the supported pairs.
+ * - `<pair>@depth20@100ms`: top-20 partial book snapshots (no diff sync needed; no event time).
+ * - `<pair>@aggTrade`: last traded price with trade time.
+ * - `<pair>@ticker`: rolling 24h statistics once per second with event time.
+ * Reconnects with capped exponential backoff and full jitter; an idle watchdog catches silent stalls.
+ * Protocol-level pings from Binance are answered automatically by `ws`.
+ */
 export class BinanceConnector {
   private ws: WebSocket | null = null;
-  private isExplicitlyClosed = false;
+  private explicitlyClosed = false;
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private lastMessageTimestamp = 0;
+  private watchdogTimer: NodeJS.Timeout | null = null;
+  private lastMessageAt = 0;
 
-  private readonly baseUrl: string;
+  private readonly url: string;
   private readonly reconnectInitialDelayMs: number;
   private readonly reconnectMaxDelayMs: number;
-  private readonly heartbeatIntervalMs: number;
+  private readonly idleTimeoutMs: number;
   private readonly metrics: MetricsRegistry;
 
   private onDepthHandler: DepthUpdateHandler | null = null;
-  private onTickerHandler: TickerUpdateHandler | null = null;
   private onTradeHandler: TradeUpdateHandler | null = null;
+  private onTickerHandler: TickerUpdateHandler | null = null;
   private onStatusHandler: StatusChangeHandler | null = null;
 
   constructor(options: BinanceConnectorOptions = {}) {
     this.reconnectInitialDelayMs = options.reconnectInitialDelayMs ?? 1000;
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 30000;
-    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? 30000;
+    this.idleTimeoutMs = options.idleTimeoutMs ?? 10000;
     this.metrics = options.metrics ?? defaultMetrics;
+    const pairs = options.pairs ?? (Object.keys(SUPPORTED_PAIRS) as SupportedPairSymbol[]);
+    this.url = buildStreamUrl(options.wsBaseUrl ?? DEFAULT_BINANCE_WS_URL, pairs);
+  }
 
-    const pairs = Object.keys(SUPPORTED_PAIRS).map((p) => p.toLowerCase());
-    const depthStreams = pairs.map((p) => `${p}@depth20@100ms`).join('/');
-    const tradeStreams = pairs.map((p) => `${p}@trade`).join('/');
-    const tickerStreams = pairs.map((p) => `${p}@ticker`).join('/');
-    const defaultStreamUrl = `wss://stream.binance.com:9443/stream?streams=${depthStreams}/${tradeStreams}/${tickerStreams}/!miniTicker@arr`;
-
-    this.baseUrl = options.baseUrl ?? defaultStreamUrl;
+  public get streamUrl(): string {
+    return this.url;
   }
 
   public onDepth(handler: DepthUpdateHandler): this {
@@ -75,13 +75,13 @@ export class BinanceConnector {
     return this;
   }
 
-  public onTicker(handler: TickerUpdateHandler): this {
-    this.onTickerHandler = handler;
+  public onTrade(handler: TradeUpdateHandler): this {
+    this.onTradeHandler = handler;
     return this;
   }
 
-  public onTrade(handler: TradeUpdateHandler): this {
-    this.onTradeHandler = handler;
+  public onTicker(handler: TickerUpdateHandler): this {
+    this.onTickerHandler = handler;
     return this;
   }
 
@@ -91,243 +91,56 @@ export class BinanceConnector {
   }
 
   public connect(): void {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
+    this.explicitlyClosed = false;
 
-    this.isExplicitlyClosed = false;
-
+    let ws: WebSocket;
     try {
-      this.ws = new WebSocket(this.baseUrl);
-
-      this.ws.on('open', () => {
-        this.reconnectAttempts = 0;
-        this.lastMessageTimestamp = Date.now();
-        this.metrics.binanceConnectionStatus.set(1);
-        this.onStatusHandler?.(true);
-        this.startHeartbeat();
-      });
-
-      this.ws.on('message', (rawData: WebSocket.RawData) => {
-        this.lastMessageTimestamp = Date.now();
-        this.handleMessage(rawData);
-      });
-
-      this.ws.on('close', () => {
-        this.cleanupSocket();
-        this.metrics.binanceConnectionStatus.set(0);
-        this.onStatusHandler?.(false);
-        if (!this.isExplicitlyClosed) {
-          this.scheduleReconnect();
-        }
-      });
-
-      this.ws.on('error', (_err) => {
-        // Socket close event will trigger reconnect
-        this.ws?.terminate();
-      });
-
-      this.ws.on('ping', () => {
-        this.ws?.pong();
-      });
+      ws = new WebSocket(this.url);
     } catch {
       this.scheduleReconnect();
+      return;
     }
-  }
+    this.ws = ws;
 
-  private handleMessage(rawData: WebSocket.RawData): void {
-    try {
-      const payload = JSON.parse(rawData.toString());
-      if (!payload.stream || !payload.data) return;
+    ws.on('open', () => {
+      this.reconnectAttempts = 0;
+      this.lastMessageAt = Date.now();
+      this.metrics.binanceConnectionStatus.set(1);
+      this.startWatchdog();
+      this.onStatusHandler?.(true);
+    });
 
-      const stream: string = payload.stream;
+    ws.on('message', (raw: WebSocket.RawData) => {
+      this.lastMessageAt = Date.now();
+      this.handleMessage(raw);
+    });
 
-      // Handle depth20 updates: e.g. "btcusdt@depth20@100ms"
-      if (stream.includes('@depth20')) {
-        const symbolMatch = stream.split('@')[0].toUpperCase() as SupportedPairSymbol;
-        if (SUPPORTED_PAIRS[symbolMatch]) {
-          const rawBids: [string, string][] = payload.data.bids || [];
-          const rawAsks: [string, string][] = payload.data.asks || [];
+    ws.on('close', () => {
+      if (this.ws !== ws) return; // superseded socket
+      this.stopWatchdog();
+      this.ws = null;
+      this.metrics.binanceConnectionStatus.set(0);
+      this.onStatusHandler?.(false);
+      if (!this.explicitlyClosed) this.scheduleReconnect();
+    });
 
-          // Drop non-finite depth levels; never propagate NaN to orderbook
-          const bids: [number, number][] = [];
-          for (const [pStr, qStr] of rawBids) {
-            const p = Number(pStr);
-            const q = Number(qStr);
-            if (Number.isFinite(p) && Number.isFinite(q) && p > 0 && q >= 0) {
-              bids.push([p, q]);
-            }
-          }
-
-          const asks: [number, number][] = [];
-          for (const [pStr, qStr] of rawAsks) {
-            const p = Number(pStr);
-            const q = Number(qStr);
-            if (Number.isFinite(p) && Number.isFinite(q) && p > 0 && q >= 0) {
-              asks.push([p, q]);
-            }
-          }
-
-          this.metrics.wsMessagesReceived.inc({ stream: 'depth20', symbol: symbolMatch });
-          this.onDepthHandler?.(symbolMatch, bids, asks);
-        }
-      }
-
-      // Handle real-time trade updates: e.g. "btcusdt@trade"
-      if (stream.includes('@trade')) {
-        const symbolMatch = stream.split('@')[0].toUpperCase() as SupportedPairSymbol;
-        if (SUPPORTED_PAIRS[symbolMatch] && payload.data) {
-          const price = Number(payload.data.p);
-          const isBuyerMaker = Boolean(payload.data.m);
-          if (Number.isFinite(price) && price > 0) {
-            this.metrics.wsMessagesReceived.inc({ stream: 'trade', symbol: symbolMatch });
-            this.onTradeHandler?.(symbolMatch, price, isBuyerMaker);
-          }
-        }
-      }
-
-      // Handle 24h individual ticker updates: e.g. "btcusdt@ticker"
-      if (stream.endsWith('@ticker')) {
-        const symbolMatch = stream.split('@')[0].toUpperCase() as SupportedPairSymbol;
-        if (SUPPORTED_PAIRS[symbolMatch] && payload.data) {
-          const item = payload.data;
-          const lastPrice = Number(item.c);
-          const openPrice = Number(item.o ?? item.c);
-          const high24h = Number(item.h);
-          const low24h = Number(item.l);
-          const volume24h = Number(item.v);
-          const change24h = item.P !== undefined ? Number(item.P) : undefined;
-
-          if (
-            Number.isFinite(lastPrice) &&
-            Number.isFinite(openPrice) &&
-            Number.isFinite(high24h) &&
-            Number.isFinite(low24h) &&
-            Number.isFinite(volume24h) &&
-            lastPrice >= 0
-          ) {
-            this.metrics.wsMessagesReceived.inc({ stream: 'ticker', symbol: symbolMatch });
-            this.onTickerHandler?.([
-              {
-                symbol: symbolMatch,
-                lastPrice,
-                openPrice,
-                high24h,
-                low24h,
-                volume24h,
-                change24h,
-              },
-            ]);
-          }
-        }
-      }
-
-      // Handle 24h miniTicker updates: "!miniTicker@arr"
-      if (stream === '!miniTicker@arr' && Array.isArray(payload.data)) {
-        const validUpdates: Array<{
-          symbol: SupportedPairSymbol;
-          lastPrice: number;
-          openPrice: number;
-          high24h: number;
-          low24h: number;
-          volume24h: number;
-        }> = [];
-
-        for (const item of payload.data) {
-          const symbol = item.s as SupportedPairSymbol;
-          if (SUPPORTED_PAIRS[symbol]) {
-            const lastPrice = Number(item.c);
-            const openPrice = Number(item.o ?? item.c);
-            const high24h = Number(item.h);
-            const low24h = Number(item.l);
-            const volume24h = Number(item.v);
-
-            // Drop entire item if c/h/l/v not finite; never propagate NaN to metadata
-            if (
-              Number.isFinite(lastPrice) &&
-              Number.isFinite(openPrice) &&
-              Number.isFinite(high24h) &&
-              Number.isFinite(low24h) &&
-              Number.isFinite(volume24h) &&
-              lastPrice >= 0 &&
-              openPrice >= 0 &&
-              high24h >= 0 &&
-              low24h >= 0 &&
-              volume24h >= 0
-            ) {
-              validUpdates.push({
-                symbol,
-                lastPrice,
-                openPrice,
-                high24h,
-                low24h,
-                volume24h,
-              });
-              this.metrics.wsMessagesReceived.inc({ stream: 'miniTicker', symbol });
-            }
-          }
-        }
-
-        if (validUpdates.length > 0) {
-          this.onTickerHandler?.(validUpdates);
-        }
-      }
-    } catch {
-      // Ingest error tolerance: ignore malformed stream packets
-    }
-  }
-
-  private scheduleReconnect(): void {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-
-    const backoff = Math.min(
-      this.reconnectInitialDelayMs * Math.pow(2, this.reconnectAttempts),
-      this.reconnectMaxDelayMs
-    );
-    // Add 10-25% random jitter to avoid thundering herd
-    const jitter = Math.random() * 0.25 * backoff;
-    const delay = Math.round(backoff + jitter);
-
-    this.reconnectAttempts++;
-    this.reconnectTimer = setTimeout(() => {
-      this.connect();
-    }, delay);
-  }
-
-  private startHeartbeat(): void {
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-
-    this.heartbeatTimer = setInterval(() => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-      const idleDuration = Date.now() - this.lastMessageTimestamp;
-      if (idleDuration > this.heartbeatIntervalMs * 2) {
-        // Socket stalled, force terminate to trigger reconnect
-        this.ws.terminate();
-      } else {
-        this.ws.ping();
-      }
-    }, this.heartbeatIntervalMs);
-  }
-
-  private cleanupSocket(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-    this.ws = null;
+    // 'close' always follows 'error'; terminate so it fires promptly.
+    ws.on('error', () => ws.terminate());
   }
 
   public disconnect(): void {
-    this.isExplicitlyClosed = true;
+    this.explicitlyClosed = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.cleanupSocket();
-    if (this.ws) {
-      this.ws.terminate();
-      this.ws = null;
+    this.stopWatchdog();
+    const ws = this.ws;
+    this.ws = null;
+    if (ws) {
+      ws.removeAllListeners('message');
+      ws.terminate();
     }
     this.metrics.binanceConnectionStatus.set(0);
     this.onStatusHandler?.(false);
@@ -336,4 +149,115 @@ export class BinanceConnector {
   public isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
+
+  private handleMessage(raw: WebSocket.RawData): void {
+    let msg: { stream?: unknown; data?: Record<string, unknown> };
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch {
+      this.invalid('json');
+      return;
+    }
+    if (typeof msg.stream !== 'string' || !msg.data || typeof msg.data !== 'object') {
+      this.invalid('envelope');
+      return;
+    }
+
+    const [symbolPart, kind] = msg.stream.split('@');
+    const symbol = symbolPart?.toUpperCase();
+    if (!symbol || !Object.prototype.hasOwnProperty.call(SUPPORTED_PAIRS, symbol)) {
+      this.invalid('symbol');
+      return;
+    }
+    const pair = symbol as SupportedPairSymbol;
+    const data = msg.data;
+
+    switch (kind) {
+      case 'depth20': {
+        const bids = parseLevels(data.bids);
+        const asks = parseLevels(data.asks);
+        if (!bids || !asks) return this.invalid('depth');
+        this.metrics.wsMessagesReceived.inc({ stream: 'depth20', symbol: pair });
+        this.onDepthHandler?.(pair, bids, asks);
+        return;
+      }
+      case 'aggTrade': {
+        const price = Number(data.p);
+        const tradeTs = Number(data.T);
+        if (!(price > 0) || !Number.isFinite(price) || !(tradeTs > 0)) return this.invalid('aggTrade');
+        this.metrics.wsMessagesReceived.inc({ stream: 'aggTrade', symbol: pair });
+        this.onTradeHandler?.(pair, price, tradeTs);
+        return;
+      }
+      case 'ticker': {
+        const ticker: Ticker24h = {
+          lastPrice: Number(data.c),
+          high24h: Number(data.h),
+          low24h: Number(data.l),
+          volume24h: Number(data.v),
+          changePct: Number(data.P),
+          eventTs: Number(data.E),
+        };
+        const valid =
+          ticker.lastPrice > 0 &&
+          [ticker.high24h, ticker.low24h, ticker.volume24h].every((n) => Number.isFinite(n) && n >= 0) &&
+          Number.isFinite(ticker.changePct) &&
+          ticker.eventTs > 0;
+        if (!valid) return this.invalid('ticker');
+        this.metrics.wsMessagesReceived.inc({ stream: 'ticker', symbol: pair });
+        this.onTickerHandler?.(pair, ticker);
+        return;
+      }
+      default:
+        this.invalid('stream');
+    }
+  }
+
+  private invalid(reason: string): void {
+    this.metrics.upstreamMessagesInvalid.inc({ reason });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer || this.explicitlyClosed) return;
+    const cap = Math.min(this.reconnectInitialDelayMs * 2 ** this.reconnectAttempts, this.reconnectMaxDelayMs);
+    // Full jitter spreads reconnects of many gateway replicas after a shared upstream outage.
+    const delay = Math.max(this.reconnectInitialDelayMs / 4, Math.random() * cap);
+    this.reconnectAttempts++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
+    this.reconnectTimer.unref?.();
+  }
+
+  private startWatchdog(): void {
+    this.stopWatchdog();
+    this.watchdogTimer = setInterval(() => {
+      if (this.ws && Date.now() - this.lastMessageAt > this.idleTimeoutMs) {
+        this.ws.terminate(); // 'close' handler schedules the reconnect
+      }
+    }, Math.max(250, this.idleTimeoutMs / 2));
+    this.watchdogTimer.unref?.();
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+}
+
+/** Parses Binance `[["price","qty"], ...]` levels; returns null if any level is malformed. */
+function parseLevels(raw: unknown): [number, number][] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: [number, number][] = [];
+  for (const level of raw) {
+    if (!Array.isArray(level) || level.length < 2) return null;
+    const price = Number(level[0]);
+    const qty = Number(level[1]);
+    if (!Number.isFinite(price) || !Number.isFinite(qty) || price <= 0 || qty < 0) return null;
+    out.push([price, qty]);
+  }
+  return out;
 }

@@ -3,6 +3,7 @@ import client from 'prom-client';
 export class MetricsRegistry {
   public readonly registry: client.Registry;
   public readonly wsMessagesReceived: client.Counter<'stream' | 'symbol'>;
+  public readonly upstreamMessagesInvalid: client.Counter<'reason'>;
   public readonly connectedClients: client.Gauge<string>;
   public readonly laggingClients: client.Gauge<string>;
   public readonly framesSent: client.Counter<string>;
@@ -10,6 +11,9 @@ export class MetricsRegistry {
   public readonly bytesSent: client.Counter<string>;
   public readonly slowConsumerDisconnects: client.Counter<string>;
   public readonly tickDuration: client.Histogram<string>;
+  public readonly rateLimitDisconnects: client.Counter<string>;
+  public readonly heartbeatTimeouts: client.Counter<string>;
+  public readonly upgradeRejections: client.Counter<'reason'>;
   public readonly binanceConnectionStatus: client.Gauge<string>;
 
   constructor() {
@@ -25,6 +29,13 @@ export class MetricsRegistry {
       name: 'pulsecrypto_ws_messages_received_total',
       help: 'Total number of WebSocket messages received from Binance streams',
       labelNames: ['stream', 'symbol'],
+      registers: [this.registry],
+    });
+
+    this.upstreamMessagesInvalid = new client.Counter({
+      name: 'pulsecrypto_upstream_messages_invalid_total',
+      help: 'Upstream messages ignored because they were malformed or for unsupported symbols',
+      labelNames: ['reason'],
       registers: [this.registry],
     });
 
@@ -68,6 +79,25 @@ export class MetricsRegistry {
       name: 'pulsecrypto_tick_duration_seconds',
       help: 'Time spent per fan-out tick across all clients',
       buckets: [0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1],
+      registers: [this.registry],
+    });
+
+    this.rateLimitDisconnects = new client.Counter({
+      name: 'pulsecrypto_rate_limit_disconnects_total',
+      help: 'Clients closed with 1008 for exceeding the inbound message rate limit',
+      registers: [this.registry],
+    });
+
+    this.heartbeatTimeouts = new client.Counter({
+      name: 'pulsecrypto_heartbeat_timeouts_total',
+      help: 'Clients terminated for missing a heartbeat pong (half-open connections)',
+      registers: [this.registry],
+    });
+
+    this.upgradeRejections = new client.Counter({
+      name: 'pulsecrypto_upgrade_rejections_total',
+      help: 'WebSocket upgrade requests rejected before connecting',
+      labelNames: ['reason'],
       registers: [this.registry],
     });
 

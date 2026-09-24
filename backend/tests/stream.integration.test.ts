@@ -13,10 +13,12 @@ import { InMemoryMarketSource, StatusTracker } from '../src/market/marketSource.
 /** Minimal client that records every frame and lets tests await specific messages. */
 class TestClient {
   readonly frames: Frame[] = [];
+  binaryFrames = 0;
   private waiters: Array<() => void> = [];
 
   private constructor(readonly ws: WebSocket) {
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) this.binaryFrames++;
       this.frames.push(FrameSchema.parse(JSON.parse(data.toString())));
       this.waiters.splice(0).forEach((w) => w());
     });
@@ -122,7 +124,8 @@ describe('WebSocket stream (Fastify + ws integration)', () => {
   it('streams tickers after subscribing, and nothing before', async () => {
     const c = await client();
     await c.waitFor('hello');
-    metadata.updateTradePrice('BTCUSDT', 65000);
+    metadata.applyTicker24h('BTCUSDT', { lastPrice: 64990, high24h: 66000, low24h: 64000, volume24h: 10, changePct: 1, eventTs: 1 });
+    metadata.applyTrade('BTCUSDT', 65000, 2);
     await new Promise((r) => setTimeout(r, 150));
     expect(c.messages().some((m) => m.type === 'tickers')).toBe(false);
 
@@ -131,8 +134,11 @@ describe('WebSocket stream (Fastify + ws integration)', () => {
     const tickers = await c.waitFor('tickers');
     expect(tickers.data).toEqual([expect.objectContaining({ pair: 'BTCUSDT', price: 65000 })]);
 
-    metadata.updateTradePrice('BTCUSDT', 65001);
+    metadata.applyTrade('BTCUSDT', 65001, 3);
     await c.waitFor('tickers', (t) => t.data[0].price === 65001);
+    // Every frame (control and shared data frames) must be a text frame: RN/browser clients
+    // receive binary frames as ArrayBuffer and would drop them.
+    expect(c.binaryFrames).toBe(0);
   });
 
   it('streams only the subscribed order book and stops after unsubscribe', async () => {
@@ -177,5 +183,79 @@ describe('WebSocket stream (Fastify + ws integration)', () => {
     await a.waitFor('hello');
     await b.waitFor('hello');
     expect(hub.getConnectedClientCount()).toBe(2);
+  });
+});
+
+describe('WebSocket upgrade and connection limits (integration)', () => {
+  let app: FastifyInstance;
+  let hub: ChannelHub;
+  let url: string;
+  const sockets: WebSocket[] = [];
+
+  beforeEach(async () => {
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      ALLOWED_ORIGINS: 'https://app.example, https://admin.example',
+      WS_MAX_CONNECTIONS: '2',
+      WS_MAX_PAYLOAD_BYTES: '1024',
+    });
+    const metrics = new MetricsRegistry();
+    const metadata = new MetadataService();
+    hub = new ChannelHub({
+      source: new InMemoryMarketSource(metadata, new OrderBookManager(), new StatusTracker()),
+      metrics,
+      tickMs: config.FLUSH_INTERVAL_MS,
+      softLimitBytes: config.WS_SOFT_LIMIT_BYTES,
+      hardLimitBytes: config.WS_HARD_LIMIT_BYTES,
+      lagGraceMs: config.WS_LAG_GRACE_MS,
+      maxConnections: config.WS_MAX_CONNECTIONS,
+    });
+    app = await buildApp({ enableLogger: false, config, metadataService: metadata, metricsRegistry: metrics, hub });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const address = app.server.address();
+    url = `ws://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}/ws`;
+  });
+
+  afterEach(async () => {
+    sockets.splice(0).forEach((s) => s.terminate());
+    await app.close();
+  });
+
+  /** Resolves with 'open' or the HTTP status of a rejected upgrade. */
+  function attempt(headers: Record<string, string> = {}): Promise<{ ws: WebSocket; result: 'open' | number }> {
+    const ws = new WebSocket(url, { headers });
+    sockets.push(ws);
+    return new Promise((resolve) => {
+      ws.once('open', () => resolve({ ws, result: 'open' }));
+      ws.once('unexpected-response', (_req, res) => resolve({ ws, result: res.statusCode ?? 0 }));
+      ws.once('error', () => undefined);
+    });
+  }
+
+  it('accepts native clients without an Origin header and allowlisted origins', async () => {
+    expect((await attempt()).result).toBe('open');
+    expect((await attempt({ Origin: 'https://admin.example' })).result).toBe('open');
+  });
+
+  it('rejects foreign browser origins with 403 before upgrading', async () => {
+    expect((await attempt({ Origin: 'https://evil.example' })).result).toBe(403);
+    expect(hub.getConnectedClientCount()).toBe(0);
+  });
+
+  it('answers 503 once at capacity without disturbing connected clients', async () => {
+    const a = await attempt();
+    const b = await attempt();
+    expect([a.result, b.result]).toEqual(['open', 'open']);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await attempt()).result).toBe(503);
+    expect(a.ws.readyState).toBe(WebSocket.OPEN);
+    expect(b.ws.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('closes the socket with 1009 when a message exceeds the payload limit', async () => {
+    const { ws } = await attempt();
+    const closed = new Promise<number>((resolve) => ws.once('close', (code) => resolve(code)));
+    ws.send(JSON.stringify({ type: 'ping', pad: 'x'.repeat(2048) }));
+    expect(await closed).toBe(1009);
   });
 });

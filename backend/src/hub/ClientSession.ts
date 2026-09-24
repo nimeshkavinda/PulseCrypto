@@ -4,11 +4,12 @@ import { SupportedPairSymbol } from '@pulsecrypto/shared';
 export interface HubSocket {
   readonly readyState: number;
   readonly bufferedAmount: number;
-  send(data: string): void;
+  send(data: string | Buffer, options?: { binary?: boolean }): void;
+  ping(): void;
   close(code?: number, reason?: string): void;
   terminate(): void;
   on(event: 'message', listener: (data: Buffer | ArrayBuffer | Buffer[]) => void): unknown;
-  on(event: 'close' | 'error', listener: (...args: unknown[]) => void): unknown;
+  on(event: 'close' | 'error' | 'pong', listener: (...args: unknown[]) => void): unknown;
 }
 
 /**
@@ -33,7 +34,21 @@ export class ClientSession {
   public lastErrorAt = 0;
   public closed = false;
 
-  constructor(public readonly socket: HubSocket) {}
+  /** Inbound rate limiting (token bucket). */
+  public tokens: number;
+  public tokensRefilledAt: number;
+
+  /** Heartbeat: cleared when a ping is sent, set again on pong (or any inbound message). */
+  public alive = true;
+
+  constructor(
+    public readonly socket: HubSocket,
+    burst: number,
+    now: number
+  ) {
+    this.tokens = burst;
+    this.tokensRefilledAt = now;
+  }
 
   public channels(): string[] {
     const list: string[] = [];

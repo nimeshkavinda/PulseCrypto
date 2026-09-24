@@ -62,16 +62,23 @@ Sent once, immediately on connect, in the same frame as the current `status`.
 ```json
 {"type":"status","upstream":"live","stalePairs":[],"since":1727071200000}
 ```
-`upstream` is one of `connecting`, `live`, `stale` or `down`. `since` is when the status last changed. Clients should show upstream problems even while their own socket is healthy: a connected gateway with a dead upstream is serving frozen data.
+| `upstream` | Meaning |
+|---|---|
+| `connecting` | The gateway has not connected to the exchange yet. |
+| `live` | Connected, and every pair's order book updated within `STALE_AFTER_MS` (default 3 s). |
+| `stale` | Connected, but the pairs in `stalePairs` have not updated within `STALE_AFTER_MS`. |
+| `down` | The exchange connection dropped after having been up. The gateway is reconnecting with backoff. |
+
+`since` is when the status last changed. The order book stream (every 100 ms per pair) is the freshness heartbeat; tickers (1 s) and trades (bursty) are not used for this. Clients should surface upstream problems even while their own socket is healthy, because a connected gateway with a stale upstream is serving frozen data.
 
 ### `tickers`
 ```json
 {"type":"tickers","data":[
   {"pair":"BTCUSDT","price":64238.17,"change24h":2.45,"high24h":65120,"low24h":62800,
-   "volume24h":28410.5,"updatedAt":1727071234501,"eventTs":null}
+   "volume24h":28410.5,"updatedAt":1727071234501,"eventTs":1727071234498}
 ]}
 ```
-`change24h` is a percentage. `volume24h` is in the base asset.
+`change24h` is a percentage. `volume24h` is in the base asset. `price` is the last traded price: it comes from aggregated trades, or from the 24h ticker when that is newer. A price never moves backwards in exchange time.
 
 ### `book`
 ```json
@@ -90,7 +97,7 @@ Sent once, immediately on connect, in the same frame as the current `status`.
 | Field | Meaning |
 |---|---|
 | `updatedAt` | When the gateway received the latest upstream update for this item. Use it for "last updated" displays and staleness checks. |
-| `eventTs` | Exchange event time when the upstream message carries one, otherwise `null`. |
+| `eventTs` | Exchange event time. For tickers, the latest of the 24h ticker event time and the last aggregated trade time. For books it is always `null`, because Binance partial-depth snapshots carry no event time. |
 | frame `ts` | When the frame was sent. It is **not** a measure of data freshness. |
 
 ### `ack`, `pong`, `error`
@@ -108,6 +115,27 @@ Per client, on every tick:
 3. **Above the soft limit for longer than `WS_LAG_GRACE_MS`** (default 5 s): close with 1013.
 
 Server memory per client is therefore bounded by the hard limit, and a slow client never slows down anyone else. Clients should treat 1013 as "reconnect with backoff".
+
+## Connection limits
+| Limit | Default (env) | Behaviour |
+|---|---|---|
+| Browser origin | `ALLOWED_ORIGINS` = `*` | A request with an `Origin` header not in the allowlist gets **HTTP 403** before the upgrade. Native apps send no `Origin` and are always allowed. |
+| Connections per instance | `WS_MAX_CONNECTIONS` = 10000 | Further upgrades get **HTTP 503** + `Retry-After: 5`. |
+| Inbound message size | `WS_MAX_PAYLOAD_BYTES` = 4096 | Larger messages close the socket with **1009**. |
+| Inbound message rate | `WS_RATE_LIMIT_BURST` = 20, `WS_RATE_LIMIT_PER_SEC` = 10 | Token bucket per client. When empty, the socket closes with **1008 `rate limit`**. A ping every few seconds plus occasional subscribes never comes close. |
+| Liveness | `WS_HEARTBEAT_MS` = 30000 | The server sends a protocol-level ping. A client that hasn't answered by the next heartbeat is terminated. Standard WebSocket clients answer pings automatically. |
+
+Authentication and TLS are expected at the edge (load balancer / API gateway), in front of the gateway.
+
+## Upstream sources
+| Data | Binance source |
+|---|---|
+| Order book | `<pair>@depth20@100ms` (top-20 partial snapshots, so no diff/sequence sync is needed) |
+| Last price | `<pair>@aggTrade` |
+| 24h statistics | `<pair>@ticker` (every 1 s). Bootstrapped at startup from REST `GET /api/v3/ticker/24hr` |
+| Trading status, tick/lot size | REST `GET /api/v3/exchangeInfo` at startup, refreshed hourly |
+
+Hosts are configurable through `BINANCE_WS_URL` and `BINANCE_REST_URL`. The market-data-only hosts `wss://data-stream.binance.vision` and `https://data-api.binance.vision` work where the main hosts are unavailable.
 
 ## Example session
 ```

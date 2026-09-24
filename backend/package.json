@@ -14,7 +14,8 @@
     "predev": "npm run build:shared",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "loadtest": "tsx scripts/loadtest/run.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
