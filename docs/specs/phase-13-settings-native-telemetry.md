@@ -5,7 +5,7 @@ created: '2026-09-23'
 status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
-baseline_commit: '22cc5689e4b35d6a5cc1beb822a855741ac0c7cf'
+baseline_commit: 'ad90e31c6c272edc46f5d4a94d393f4b5266ab5f'
 context:
   - '{project-root}/docs/protocol.md'
 ---
@@ -95,7 +95,7 @@ context:
 
 ## Implementation Notes
 
-- **Found during this phase:** with per-screen subscriptions, the Telemetry tab subscribed to nothing, so the ingestion card read ~0 (only ping/pong traffic). The author spotted it on the simulator. Telemetry now subscribes to the terminal's stream while focused, and shows frames/s (10 at 100 ms) with msgs/s, KB/s and what is being measured. Fixed in e4002cb.
+- **Found during this phase:** with per-screen subscriptions, the Telemetry tab subscribed to nothing, so the ingestion card read ~0 (only ping/pong traffic). The author spotted it on the simulator. Telemetry now subscribes to the terminal's stream while focused, and shows frames/s (10 at 100 ms) with msgs/s, KB/s and what is being measured. Fixed in 88c5f47.
 - **`perf-monitor`** is a local Expo Module in `mobile/modules/`, autolinked and optional at runtime (`requireOptionalNativeModule` via `expo`).
   - iOS: memory = `task_vm_info.phys_footprint`; FPS = `CADisplayLink` with `preferredFrameRateRange` up to 120 Hz.
   - Android: memory = `Debug.MemoryInfo.totalPss`; FPS = `Choreographer.FrameCallback`.
@@ -120,7 +120,7 @@ Review pass 1, 2026-09-23: blind, edge-case and verification-gap lenses.
 
 | # | Finding | Verdict | Route | Evidence |
 |---|---|---|---|---|
-| 1 | The telemetry ingestion rate read ~0 because no channels were subscribed on that tab | high | patch | Reported by the author from the simulator. Fixed in e4002cb and verified at 10 frames/s. |
+| 1 | The telemetry ingestion rate read ~0 because no channels were subscribed on that tab | high | patch | Reported by the author from the simulator. Fixed in 88c5f47 and verified at 10 frames/s. |
 | 2 | `getUiFrameRate` returns 0 until the first 1 s window completes | low | patch | The hook maps 0 to "—" (null) instead of showing 0 FPS. |
 | 3 | `Debug.getMemoryInfo` costs a few ms on Android | low | reject | It's called once per second, only while the Telemetry tab is focused. |
 | 4 | Adaptive cadence can't be verified on the simulator (always Wi-Fi) | low | defer | Covered by the pure matrix and the runtime wiring test with a fake network-cost feed. A cellular emulator check can happen during the demo recording. |
