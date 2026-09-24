@@ -3,10 +3,24 @@ import {
   SupportedPairSymbol,
   PairMetadata,
   PairMetadataSchema,
+  Ticker,
 } from '@pulsecrypto/shared';
+
+export interface VersionedTicker {
+  version: number;
+  ticker: Ticker;
+}
+
+interface TickerTracking {
+  /** Monotonic per-pair version. 0 means no upstream ticker/trade data has been received yet. */
+  version: number;
+  updatedAt: number;
+  eventTs: number | null;
+}
 
 export class MetadataService {
   private metadataStore: Map<SupportedPairSymbol, PairMetadata> = new Map();
+  private tracking: Map<SupportedPairSymbol, TickerTracking> = new Map();
 
   constructor() {
     this.initializeDefaults();
@@ -49,6 +63,7 @@ export class MetadataService {
 
       PairMetadataSchema.parse(meta); // Validate against shared contract
       this.metadataStore.set(symbol, meta);
+      this.tracking.set(symbol, { version: 0, updatedAt: 0, eventTs: null });
     }
   }
 
@@ -62,7 +77,8 @@ export class MetadataService {
     high24h: number,
     low24h: number,
     volume24h: number,
-    change24h: number
+    change24h: number,
+    eventTs: number | null = null
   ): void {
     const existing = this.metadataStore.get(symbol);
     if (!existing) return;
@@ -77,6 +93,7 @@ export class MetadataService {
     };
 
     this.metadataStore.set(symbol, updated);
+    this.touch(symbol, eventTs);
   }
 
   /**
@@ -98,9 +115,10 @@ export class MetadataService {
   /**
    * Update real-time last trade price immediately from Binance @trade stream
    */
-  public updateTradePrice(symbol: SupportedPairSymbol, price: number): void {
+  public updateTradePrice(symbol: SupportedPairSymbol, price: number, eventTs: number | null = null): void {
     const existing = this.metadataStore.get(symbol);
     if (!existing || !Number.isFinite(price) || price <= 0) return;
+    if (existing.lastPrice === price && this.getVersion(symbol) > 0) return;
 
     this.metadataStore.set(symbol, {
       ...existing,
@@ -108,6 +126,39 @@ export class MetadataService {
       high24h: Math.max(existing.high24h, price),
       low24h: Math.min(existing.low24h, price),
     });
+    this.touch(symbol, eventTs);
+  }
+
+  private touch(symbol: SupportedPairSymbol, eventTs: number | null): void {
+    const t = this.tracking.get(symbol);
+    if (!t) return;
+    t.version += 1;
+    t.updatedAt = Date.now();
+    t.eventTs = eventTs;
+  }
+
+  public getVersion(symbol: SupportedPairSymbol): number {
+    return this.tracking.get(symbol)?.version ?? 0;
+  }
+
+  /** Streaming ticker view for a pair, or null until upstream data has been received. */
+  public getTicker(symbol: SupportedPairSymbol): VersionedTicker | null {
+    const t = this.tracking.get(symbol);
+    const meta = this.metadataStore.get(symbol);
+    if (!t || !meta || t.version === 0) return null;
+    return {
+      version: t.version,
+      ticker: {
+        pair: symbol,
+        price: meta.lastPrice,
+        change24h: meta.change24h,
+        high24h: meta.high24h,
+        low24h: meta.low24h,
+        volume24h: meta.volume24h,
+        updatedAt: t.updatedAt,
+        eventTs: t.eventTs,
+      },
+    };
   }
 
   /**
@@ -125,4 +176,3 @@ export class MetadataService {
   }
 }
 
-export const defaultMetadataService = new MetadataService();

@@ -6,8 +6,12 @@
   "main": "dist/app.js",
   "type": "module",
   "scripts": {
+    "build:shared": "npm --prefix ../shared run build",
+    "prebuild": "npm run build:shared",
     "build": "tsc",
+    "pretypecheck": "npm run build:shared",
     "typecheck": "tsc --project tsconfig.test.json",
+    "predev": "npm run build:shared",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "test": "vitest run"

@@ -43,7 +43,7 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [x] **T5.1**: Build Last Price Header component with 24h change %, 24h high/low, and connection status pill.
 - [x] **T5.2**: Build Live Order Book table (top 10 bids in green, top 10 asks in red) with animated volume depth bars.
 - [x] **T5.3**: Implement UI-thread price flash micro-animations (green for tick up, red for tick down via Reanimated).
-- [x] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with safety-floored redraw cadence (`Math.max(sliderValue, 250)`), Liquidity Gap badge, and Buy/Sell Pressure ratio.
+- [x] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with Liquidity Gap badge and Buy/Sell Pressure label. _(The planned 250 ms redraw floor was not implemented; redraw cadence is handled by the store commit cadence in T11.2, and the chart is reworked in T12.3.)_
 - [x] **T5.5**: Gateway Connection & Navigation Integration:
   - Wire header `LIVE` status pill to active WebSocket connectivity state.
   - Consolidate gateway URL resolution into a single reactive URL utility module (`marketApi.resolveHttpBaseUrl` vs `storage.getHttpGatewayUrl`).
@@ -67,12 +67,12 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 ## Phase 7: Offline Resilience, Error Handling & Polish
 - [x] **T7.1**: Implement resilient WebSocket client with exponential backoff reconnection, ping/pong health monitoring, and offline indicator.
 - [x] **T7.2**: Implement stale data cache: maintain most recent market data on screen if backend connection drops.
-- [x] **T7.3**: Verify on Android Emulator and ensure smooth 60 FPS operation under sustained 100ms update bursts.
+- [x] **T7.3**: Manual smoke test on the Android Emulator under sustained 100 ms updates. _(Frame-rate measurement moved to T14.3.)_
 - [x] **T7.4**: Mobile Lifecycle, Resiliency & Testing Hardening:
-  - Wire per-row SYNCED / LIVE indicators to real streaming status.
-  - Implement focus-aware polling (`useFocusEffect` / app background pause) to avoid redundant background network calls.
+  - Wire per-row SYNCED / LIVE indicators to socket connection status. _(Per-row data freshness: T12.1.)_
+  - Pause REST polling and the socket while the app is backgrounded (AppState). _(Focus-aware sampling for telemetry: T13.2.)_
   - Move dev-only tooling (`reactotron-react-native`) to `devDependencies`.
-  - Add hook and component integration tests: `useFavorites` toggle + restore, `FlashList` render, and pull-to-refresh refetch path with `QueryClientProvider` wrapper.
+  - Add storage-level integration tests: favourites toggle + restore, and the pull-to-refresh refetch path through `QueryClient`. _(Component render tests: T11.4.)_
 
 ---
 
@@ -85,3 +85,48 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
   - At-scale production discussion (Kubernetes HPA, Redis/NATS fan-out, multi-region).
   - AI-assisted development workflow breakdown.
 - [ ] **T8.2**: Record application demonstration video/screen recording.
+
+---
+
+## Phase 9: Stream Efficiency & Backpressure Improvements
+_Improvements from end-to-end testing: cut per-client bandwidth, send only what changed, handle slow consumers without wasted writes._
+- [x] **T9.1**: Define the versioned wire protocol in `shared/src/protocol.ts`, covering the frame envelope, the `hello`/`status`/`tickers`/`book`/`ack`/`pong`/`error` messages, and the client `subscribe`/`unsubscribe`/`setCadence`/`ping` messages. Document it in `docs/protocol.md`.
+- [x] **T9.2**: `ChannelHub` + `ClientSession`. Clients opt in to channels (`tickers`, `book:<PAIR>`). Each changed item is serialized once per tick, and each client gets at most one batched frame per tick.
+- [x] **T9.3**: Per-client last-value backpressure. Frames are skipped while the socket is congested, and a skipped client later receives the latest state. Sustained lag closes the socket with 1013.
+- [x] **T9.4**: Keep schema validation at the inbound boundary only, out of the per-tick path.
+- [x] **T9.5**: Fastify + `ws` integration test suite.
+
+## Phase 10: Upstream Ingestion Fixes & Gateway Hardening
+- [ ] **T10.1**: Upstream stream set of `depth20@100ms` + `aggTrade` + `ticker`, with a configurable `BINANCE_WS_URL` and a clean connector shutdown.
+- [ ] **T10.2**: Bootstrap metadata from Binance REST (`ticker/24hr`, `exchangeInfo`) with retry. Send exchange event timestamps, upstream `status` and per-pair staleness to clients.
+- [ ] **T10.3**: Hardening: `maxPayload`, inbound rate limiting, a connection cap, an origin allowlist, a server heartbeat, `/metrics` on an internal port, and separate `/health` and `/ready` endpoints.
+- [ ] **T10.4**: `/pairs/meta` with a response schema, `Cache-Control`/ETag, and 503 + `Retry-After` until bootstrap completes.
+- [ ] **T10.5**: A minimal production Docker image and a composition root in `server.ts`.
+- [ ] **T10.6**: A load-test harness (`backend/scripts/loadtest.ts`) with published results.
+
+## Phase 11: Mobile Connection Reliability & Render Performance
+- [ ] **T11.1**: `MarketStreamClient`, framework-agnostic: a connection state machine with full-jitter backoff, heartbeat, NetInfo/AppState integration and resubscribe on reconnect.
+- [ ] **T11.2**: An external market store with per-pair selectors and frame-batched commits.
+- [ ] **T11.3**: Gateway configuration precedence: app config, then env, then platform default. User overrides are persisted.
+- [ ] **T11.4**: A jest-expo + React Native Testing Library suite covering the state machine and render isolation.
+
+## Phase 12: Live Watchlist & Terminal Improvements
+- [ ] **T12.1**: Watchlist rows bound to the `tickers` channel, with a per-row price flash and a freshness indicator. REST is used for static metadata and pull-to-refresh.
+- [ ] **T12.2**: The terminal subscribes to `book:<pair>` and shows buy/sell pressure, spread and %, and a last-updated time with a stale badge.
+- [ ] **T12.3**: Order book bars animate with `scaleX` transforms, and the depth chart plots price against cumulative quantity.
+- [ ] **T12.4**: Cold start and offline UX: cached data labelled "last seen", skeletons, and an offline banner.
+
+## Phase 13: Settings Fixes, Native Telemetry & Hardening
+- [ ] **T13.1**: The cadence control drives server `setCadence` and shows the acknowledged value. The gateway editor is available in dev builds only.
+- [ ] **T13.2**: `perf-monitor` Expo Module (Swift + Kotlin) reporting native memory footprint and UI-thread FPS. Telemetry sampling runs only while the screen is focused.
+- [ ] **T13.3**: Dev tooling excluded from release bundles, error boundaries, and cleartext traffic allowed in debug builds only.
+
+## Phase 14: CI, E2E & Performance Evidence
+- [ ] **T14.1**: GitHub Actions running typecheck, lint, tests and the Docker build, plus the React Hooks/React Native lint rules.
+- [ ] **T14.2**: A Maestro E2E flow covering search, favourite, relaunch, terminal, offline and reconnect.
+- [ ] **T14.3**: Android frame-stats capture under a sustained burst, and the gateway load-test results.
+
+## Phase 15: Documentation Updates & Deliverables
+- [ ] **T15.1**: Update the README to match the final implementation: architecture, protocol, buffering strategy, ADRs, scaling analysis, assumptions, trade-offs and AI workflow.
+- [ ] **T15.2**: Repository default branch and a fresh-clone verification.
+- [ ] **T15.3**: Screen recording (T8.2).
