@@ -5,7 +5,7 @@ A real-time crypto market viewer in two parts:
 - **Gateway** (`backend/`): a Node.js service that ingests Binance public market streams for five USDT pairs, conflates them into the latest state in memory, and fans it out to mobile clients over one WebSocket, at most one data frame per client per 100 ms tick.
 - **App** (`mobile/`): a React Native (Expo) app with a live watchlist (search, persisted favourites, pull-to-refresh), a pair terminal (order book, spread, buy/sell pressure, depth chart), a telemetry screen and settings. It keeps working offline with the last data it received and reconnects on its own.
 
-**Demo recordings** (video only, driven by Maestro against the live gateway): [iOS simulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-ios.mp4) · [Android emulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-android.mp4), attached to the [v1.0.0 release](https://github.com/nimeshkavinda/PulseCrypto/releases/tag/v1.0.0). They cover the live watchlist, search, a favourite surviving a relaunch, the terminal, a pair switch, pull-to-refresh, the offline banner and automatic reconnect, a cadence change, and the telemetry screen with its overlay.
+**Demo recordings** (video only, driven by Maestro against the live gateway): [iOS simulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-ios.mp4) · [Android emulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-android.mp4), attached to the [v1.0.0 release](https://github.com/nimeshkavinda/PulseCrypto/releases/tag/v1.0.0). Both start from a clean install on the defaults (100 ms cadence, BTC/USDT) and hold the live terminal with its order book and depth chart, then cover the watchlist, search, a favourite surviving a relaunch, switching to ETH/USDT and SOL/USDT, pull-to-refresh, the offline banner and automatic reconnect, and a cadence change to 500 ms and back. The iOS recording ends with the telemetry screen and the performance overlay.
 
 | Document | What it covers |
 |---|---|
@@ -14,12 +14,31 @@ A real-time crypto market viewer in two parts:
 | [docs/design.md](docs/design.md) | Architecture, data flow, decision records with the alternatives rejected, scaling design |
 | [docs/requirements.md](docs/requirements.md) | Each brief requirement → where it is implemented → how it is verified |
 | [docs/tasks.md](docs/tasks.md) | The task backlog, by phase; task IDs appear in commit messages |
-| [docs/specs/](docs/specs/README.md) | The change spec behind each phase from Phase 9 on |
+| [docs/specs/](docs/specs/README.md) | Detailed change specs: intent, edge-case matrix and review log |
 
 **Stack.** npm workspaces monorepo:
 - `shared`: the protocol and REST schemas (zod), used by both sides.
 - `backend`: Fastify 5 + `ws`, Node 20. Docker image on `node:22-alpine`.
 - `mobile`: Expo SDK 57, React Native 0.86.3, React 19.2, expo-router, zustand, Reanimated 4, FlashList 2, MMKV 4, NetInfo, plus a local Expo Module, `mobile/modules/perf-monitor` (Swift + Kotlin), for native memory and frame-rate readings.
+
+## Screenshots
+
+Release builds on the iOS simulator (iPhone 18 Pro) and the Android emulator (Pixel 10 Pro). The drawer's account pages are static.
+
+| | Terminal | Order book and depth chart | Markets | Search |
+|---|---|---|---|---|
+| **iOS** | <img src="docs/screenshots/ios/terminal.jpg" width="170" alt="Terminal, iOS"> | <img src="docs/screenshots/ios/terminal-depth.jpg" width="170" alt="Order book and depth chart, iOS"> | <img src="docs/screenshots/ios/markets.jpg" width="170" alt="Markets, iOS"> | <img src="docs/screenshots/ios/search.jpg" width="170" alt="Search, iOS"> |
+| **Android** | <img src="docs/screenshots/android/terminal.jpg" width="170" alt="Terminal, Android"> | <img src="docs/screenshots/android/terminal-depth.jpg" width="170" alt="Order book and depth chart, Android"> | <img src="docs/screenshots/android/markets.jpg" width="170" alt="Markets, Android"> | <img src="docs/screenshots/android/search.jpg" width="170" alt="Search, Android"> |
+
+| | Telemetry | Settings | Offline (gateway stopped) | Drawer |
+|---|---|---|---|---|
+| **iOS** | <img src="docs/screenshots/ios/telemetry.jpg" width="170" alt="Telemetry, iOS"> | <img src="docs/screenshots/ios/settings.jpg" width="170" alt="Settings, iOS"> | <img src="docs/screenshots/ios/offline.jpg" width="170" alt="Offline (gateway stopped), iOS"> | <img src="docs/screenshots/ios/drawer.jpg" width="170" alt="Drawer, iOS"> |
+| **Android** | <img src="docs/screenshots/android/telemetry.jpg" width="170" alt="Telemetry, Android"> | <img src="docs/screenshots/android/settings.jpg" width="170" alt="Settings, Android"> | <img src="docs/screenshots/android/offline.jpg" width="170" alt="Offline (gateway stopped), Android"> | <img src="docs/screenshots/android/drawer.jpg" width="170" alt="Drawer, Android"> |
+
+| | API Keys | Security | Trade History | Support |
+|---|---|---|---|---|
+| **iOS** | <img src="docs/screenshots/ios/api-keys.jpg" width="170" alt="API Keys, iOS"> | <img src="docs/screenshots/ios/security.jpg" width="170" alt="Security, iOS"> | <img src="docs/screenshots/ios/trade-history.jpg" width="170" alt="Trade History, iOS"> | <img src="docs/screenshots/ios/support.jpg" width="170" alt="Support, iOS"> |
+| **Android** | <img src="docs/screenshots/android/api-keys.jpg" width="170" alt="API Keys, Android"> | <img src="docs/screenshots/android/security.jpg" width="170" alt="Security, Android"> | <img src="docs/screenshots/android/trade-history.jpg" width="170" alt="Trade History, Android"> | <img src="docs/screenshots/android/support.jpg" width="170" alt="Support, Android"> |
 
 ---
 
@@ -152,30 +171,42 @@ Build targets and the deterministic synthetic feed are described in [mobile/.mae
 
 ## 4. Architecture
 
-```
-               Binance: <pair>@depth20@100ms · <pair>@aggTrade · <pair>@ticker (WS)
-                        exchangeInfo · ticker/24hr (REST, at startup; exchangeInfo hourly)
-                                              │
-┌─────────────────────────────── Gateway: Node 22, Fastify 5 + ws ───────────────────────────────┐
-│  BinanceConnector ──► OrderBookManager · MetadataService       (versioned last-value caches)   │
-│   (backoff, watchdog)            │                FreshnessMonitor ──► status                  │
-│                                  ▼ every FLUSH_INTERVAL_MS (100 ms)                            │
-│                             ChannelHub ──► ClientSession × N                                   │
-│                  (serialize each changed item once)   (channels, cadence, last-sent versions,  │
-│                                                         backpressure, rate limit)              │
-│  :8080  /ws · /pairs/meta · /health · /ready                    :9464  /metrics (internal)     │
-└────────────────────────────────────────────────────────────────────────────────────────────────┘
-          │ JSON frames {v, tick, ts, msgs[]}: hello, status, tickers, book, ack, … │ GET /pairs/meta
-          ▼                                                                         ▼
-┌──────────────────────────────── App: Expo SDK 57, React Native 0.86 ───────────────────────────┐
-│  MarketStreamClient ──► MarketIngestor ──► zustand store ──► per-pair selectors ──► screens    │
-│  (state machine: backoff,   (≤ 1 commit per              (one pair's update doesn't            │
-│   NetInfo, AppState,         animation frame)              re-render another)                  │
-│   watchdog, resubscribe)                                                                       │
-│  TanStack Query: /pairs/meta, pull-to-refresh        MMKV (SQLite in Expo Go): favourites,     │
-│  perf-monitor (Swift/Kotlin): memory, UI FPS          settings, last-seen market snapshot      │
-│  Tabs: Terminal · Markets · Telemetry · Settings; drawer with static account screens           │
-└────────────────────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph BIN["Binance"]
+    WS["WebSocket streams<br/>depth20@100ms · aggTrade · ticker"]
+    REST["REST<br/>exchangeInfo · ticker/24hr"]
+  end
+  subgraph GW["Gateway: Node 22, Fastify 5 + ws"]
+    BC["BinanceConnector<br/>backoff · watchdog"]
+    BOOT["MetadataBootstrap<br/>at startup; exchangeInfo hourly"]
+    LVC["OrderBookManager · MetadataService<br/>versioned last-value caches"]
+    FM["FreshnessMonitor<br/>status: live · stale · down"]
+    HUB["ChannelHub<br/>every 100 ms: serialize each changed item once"]
+    CS["ClientSession × N<br/>channels · cadence · backpressure · rate limit"]
+    HTTP["HTTP :8080<br/>/pairs/meta · /health · /ready"]
+    MET["Metrics :9464 (internal)"]
+  end
+  subgraph APP["App: Expo SDK 57, React Native 0.86"]
+    SC["MarketStreamClient<br/>backoff · NetInfo · AppState · watchdog"]
+    ING["MarketIngestor<br/>at most 1 commit per animation frame"]
+    ST["zustand store<br/>per-pair selectors"]
+    UI["Screens<br/>Terminal · Markets · Telemetry · Settings"]
+    Q["TanStack Query<br/>pairs metadata · pull-to-refresh"]
+    MM["MMKV<br/>favourites · settings · last-seen snapshot"]
+    PM["perf-monitor (Swift / Kotlin)<br/>memory · UI FPS"]
+  end
+  WS --> BC --> LVC
+  REST --> BOOT --> LVC
+  LVC --> FM --> HUB
+  LVC --> HUB --> CS
+  LVC --> HTTP
+  CS -- "WebSocket /ws: JSON frames<br/>hello · status · tickers · book" --> SC
+  HTTP -- "GET /pairs/meta" --> Q
+  SC --> ING --> ST --> UI
+  Q --> UI
+  ST <--> MM
+  PM --> UI
 ```
 
 Each screen subscribes only to what it shows: the watchlist to `tickers`, the terminal to `tickers` plus one `book:<PAIR>`. The zod schemas in `shared/src/protocol.ts` define the protocol for both sides. The gateway validates client commands with them; the app checks incoming frames with lightweight hand-written guards (the per-tick path) and uses zod for REST responses and stored snapshots. Details: [docs/design.md](docs/design.md) and [docs/protocol.md](docs/protocol.md).
@@ -266,9 +297,9 @@ Beyond capacity, production needs a standby ingestion connection (Binance limits
 
 ## 11. AI-assisted development
 
-**Tools.** Gemini for the initial phases (1–8). Claude Code (Anthropic) for phases 9–15 and for code review.
+**Tools.** Gemini 3.8 (in Antigravity), Muse Spark 1.3 (in OpenCode) and Claude Code (Anthropic), used across the project for implementation and code review.
 
-**Method (BMAD).** Each phase from 9 on started as a spec with a frozen intent ([docs/specs/](docs/specs/README.md)). An agent implemented it; independent AI review passes ran in parallel (the diff read without context, edge-case path tracing, and claims that lack a test); a human triaged every finding. Changes were verified on both simulators with Maestro and with frame and memory measurements, and a human decided at every checkpoint and PR.
+**Method (BMAD, spec-driven).** The project started from a spec: requirements, design and a phased task backlog in `docs/` (the first commit), with task IDs carried into commit messages. An agent implemented each phase against its tasks, and every phase reached `main` through a pull request. As the work grew, each phase also got a detailed change spec with a frozen intent, an edge-case matrix and a review log ([docs/specs/](docs/specs/README.md)). Independent AI review passes ran in parallel (the diff read without context, edge-case path tracing, and claims that lack a test), and a human triaged every finding. Changes were verified on both simulators, with Maestro and with frame and memory measurements, and a human decided at every checkpoint and PR.
 
 **Defects caught by review or testing**, among others:
 - The `perf-monitor` native sources were excluded by broad `ios/` / `android/` ignore rules.
@@ -305,7 +336,7 @@ mobile/
   plugins/       config plugins (Android cleartext policy, iOS scene lifecycle)
   .maestro/      E2E flows
   tests/         jest-expo + React Native Testing Library
-docs/            protocol, performance, design, requirements, tasks, specs/
+docs/            protocol, performance, design, requirements, tasks, specs/, screenshots/
 .github/workflows/ci.yml
 docker-compose.yml
 ```

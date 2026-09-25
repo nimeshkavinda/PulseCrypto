@@ -1,6 +1,6 @@
 # Change Specs
 
-From Phase 9 on, every change starts as a short spec produced with the BMAD `bmad-build` workflow. It is implemented against that spec, then reviewed through three lenses before commit:
+Every phase is planned in [docs/tasks.md](../tasks.md) against the requirements and design in `docs/`. As the project grew, each phase also got a detailed change spec, produced with the BMAD `bmad-build` workflow. The change is implemented against that spec, then reviewed through three lenses before commit:
 - **Blind:** the diff alone.
 - **Edge-case:** path tracing.
 - **Verification-gap:** which claims lack a test.

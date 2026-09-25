@@ -17,7 +17,7 @@ context:
 ## Intent
 
 **Problem:**
-- The README, `docs/design.md` and `docs/requirements.md` still describe the Phase 1–8 design (the conflator, tiered backpressure, earlier metric names and test counts).
+- The README, `docs/design.md` and `docs/requirements.md` describe an earlier stage of the design (the conflator, tiered backpressure, earlier metric names and test counts).
 - They don't cover everything the brief asks the README for, for the current code: setup, build and run, architectural decisions, buffering strategy, assumptions, trade-offs and AI usage.
 - `GIT_WORKFLOW.md` duplicates README content, and the screen recording hasn't been made.
 
