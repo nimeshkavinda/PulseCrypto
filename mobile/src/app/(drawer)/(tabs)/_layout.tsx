@@ -89,6 +89,8 @@ export default function TabLayout() {
                 {pairDisplayName}
               </Text>
               <View
+                accessible
+                accessibilityLabel={`Market data status: ${statusLabel}`}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
