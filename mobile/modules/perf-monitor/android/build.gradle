@@ -13,3 +13,8 @@ android {
     versionName '1.0.0'
   }
 }
+
+dependencies {
+  // ReactContext / MessageQueueThread for the JS-thread frame probe.
+  implementation 'com.facebook.react:react-android'
+}

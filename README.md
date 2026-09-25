@@ -135,7 +135,7 @@ The app picks its gateway in this order: the Settings override (debug builds onl
 npm run typecheck && npm run lint && npm test
 ```
 
-315 tests: 29 in `shared` (protocol and REST schemas), 111 in `backend` (hub, backpressure, limits, upstream parsing, freshness, routes, and a Fastify + `ws` integration suite), 175 in `mobile` (stream client state machine, store and render isolation, screens, order book, storage, telemetry).
+320 tests: 29 in `shared` (protocol and REST schemas), 111 in `backend` (hub, backpressure, limits, upstream parsing, freshness, routes, and a Fastify + `ws` integration suite), 180 in `mobile` (stream client state machine, store and render isolation, screens, order book, storage, telemetry).
 
 **Offline behaviour.** With the app open:
 
