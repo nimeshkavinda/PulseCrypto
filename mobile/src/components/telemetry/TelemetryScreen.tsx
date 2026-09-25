@@ -7,6 +7,7 @@ import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { useActivePair, useConnection, useUpstream } from '../../data/store/hooks';
 import { useStreamStats } from '../../data/useStreamStats';
 import { useChannels } from '../../data/useChannels';
+import { ScreenActivity } from '../../data/screenActivity';
 import { describeStatus } from '../../data/connectionStatus';
 import { currentGatewayConfig } from '../../config/gateway';
 import { CircularFpsGauge } from './CircularFpsGauge';
@@ -18,7 +19,16 @@ import { colors } from '../../theme/tokens';
 import { STORAGE_ENGINE_LABEL } from '../../storage/engineLabel';
 import { styles } from './TelemetryScreen.styles';
 
+/** Hidden tabs stay mounted; this one reads market data paused while hidden (see ScreenActivity). */
 export function TelemetryScreen() {
+  return (
+    <ScreenActivity value={useIsFocused()}>
+      <TelemetryScreenContent />
+    </ScreenActivity>
+  );
+}
+
+function TelemetryScreenContent() {
   const isFocused = useIsFocused();
   const pair = useActivePair();
   // Subscriptions are per screen, so without this nothing would stream while this tab is open.

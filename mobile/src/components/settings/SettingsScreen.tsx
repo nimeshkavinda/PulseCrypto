@@ -7,6 +7,8 @@ import { useSettings } from '../../hooks/useSettings';
 import { useAdaptiveActive, useConnection, useUpstream } from '../../data/store/hooks';
 import { ADAPTIVE_METERED_CADENCE_MS } from '../../data/adaptiveCadence';
 import { useStreamRuntime } from '../../data/StreamProvider';
+import { ScreenActivity } from '../../data/screenActivity';
+import { useIsFocused } from 'expo-router';
 import { describeStatus } from '../../data/connectionStatus';
 import { currentGatewayConfig } from '../../config/gateway';
 import { colors } from '../../theme/tokens';
@@ -19,7 +21,16 @@ const PRESETS = [100, 250, 500, 1000];
 /** "1,234 bytes": the exact stored size, not a rounded KB figure. */
 const formatBytes = (n: number) => `${n.toLocaleString('en-US')} bytes`;
 
+/** Hidden tabs stay mounted; this one reads market data paused while hidden (see ScreenActivity). */
 export function SettingsScreen() {
+  return (
+    <ScreenActivity value={useIsFocused()}>
+      <SettingsScreenContent />
+    </ScreenActivity>
+  );
+}
+
+function SettingsScreenContent() {
   const runtime = useStreamRuntime();
   const settings = useSettings(runtime.storage);
   const connection = useConnection();

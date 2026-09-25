@@ -1,3 +1,4 @@
+import { AppState, NativeEventSubscription } from 'react-native';
 import { PerfMonitor } from '../../../modules/perf-monitor';
 
 export interface PerfSamples {
@@ -19,21 +20,33 @@ type Listener = () => void;
  * One app-wide sampler shared by the Telemetry tab and the performance overlay. It runs only while
  * someone is subscribed: the rAF loop, the 1 s poll and the native frame monitor start with the
  * first subscriber and stop with the last, so two consumers never stop each other's monitor.
- * Each run starts from empty history.
+ * Each run starts from empty history, and sampling pauses while the app is in the background.
  */
 class PerfSampler {
   private readonly listeners = new Set<Listener>();
   private snapshot: PerfSamples = EMPTY;
   private stopRun: (() => void) | null = null;
+  private appState: NativeEventSubscription | null = null;
 
   public getSnapshot = (): PerfSamples => this.snapshot;
 
   public subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
-    if (this.listeners.size === 1) this.start();
+    if (this.listeners.size === 1) {
+      // A backgrounded app draws nothing: pause instead of burning battery, resume on return.
+      this.appState = AppState.addEventListener('change', (next) => {
+        if (next === 'background') this.stop();
+        else if (next === 'active' && !this.stopRun) this.start();
+      });
+      if (AppState.currentState !== 'background') this.start();
+    }
     return () => {
       if (!this.listeners.delete(listener)) return;
-      if (this.listeners.size === 0) this.stop();
+      if (this.listeners.size === 0) {
+        this.appState?.remove();
+        this.appState = null;
+        this.stop();
+      }
     };
   };
 
@@ -69,10 +82,11 @@ class PerfSampler {
     raf = requestAnimationFrame(loop);
     callNative((m) => m.startFrameMonitor());
 
-    let last = Date.now();
+    // Monotonic clock: a wall-clock adjustment must not produce negative or infinite rates.
+    let last = performance.now();
     const id = setInterval(() => {
-      const now = Date.now();
-      const jsFps = Math.round((jsFrames * 1000) / (now - last));
+      const now = performance.now();
+      const jsFps = Math.round((jsFrames * 1000) / Math.max(1, now - last));
       jsFrames = 0;
       last = now;
       const ui = callNative((m) => m.getUiFrameRate());
@@ -102,6 +116,8 @@ class PerfSampler {
   private stop() {
     this.stopRun?.();
     this.stopRun = null;
+    // The next run must not show this run's figures, even for one render.
+    this.snapshot = EMPTY;
   }
 }
 

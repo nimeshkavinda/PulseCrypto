@@ -6,7 +6,8 @@ import { LastPriceHero } from '../src/components/terminal/LastPriceHero';
 import { ticker } from './fixtures';
 import { createTestRuntime } from './runtimeHarness';
 
-jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+let mockFocused = true;
+jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 
 let mockMeta: PairMetadata[] | undefined;
 jest.mock('../src/hooks/usePairsMetadata', () => ({ usePairsMetadata: () => ({ data: mockMeta }) }));
@@ -19,6 +20,32 @@ const doge = (priceDecimals: number): PairMetadata => ({
 describe('TerminalScreen', () => {
   afterEach(() => {
     mockMeta = undefined;
+    mockFocused = true;
+  });
+
+  it('keeps showing its last prices while its tab is hidden, and catches up when shown', async () => {
+    const t = createTestRuntime();
+    t.runtime.setActivePair('DOGEUSDT');
+    await render(t.wrap(<TerminalScreen />));
+    const tick = (price: number) =>
+      act(async () => {
+        t.runtime.ingestor.ingest([{ type: 'tickers', data: [ticker('DOGEUSDT', price, Date.now())] }]);
+        t.flush();
+      });
+    await act(async () => t.goLive());
+    await tick(0.11);
+    expect(screen.getByText('$0.11000')).toBeTruthy();
+
+    mockFocused = false;
+    await screen.rerender(t.wrap(<TerminalScreen />));
+    await tick(0.12);
+    await tick(0.13);
+    expect(screen.getByText('$0.11000')).toBeTruthy();
+    expect(screen.queryByText('$0.13000')).toBeNull();
+
+    mockFocused = true;
+    await screen.rerender(t.wrap(<TerminalScreen />));
+    expect(screen.getByText('$0.13000')).toBeTruthy();
   });
 
   async function showDoge() {

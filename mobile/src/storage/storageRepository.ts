@@ -295,7 +295,7 @@ export class StorageRepository {
   }
 
   public getPerfOverlay(): boolean {
-    return this.get<boolean>(STORAGE_KEYS.PERF_OVERLAY) ?? false;
+    return this.get<unknown>(STORAGE_KEYS.PERF_OVERLAY) === true;
   }
 
   public setPerfOverlay(enabled: boolean): void {
