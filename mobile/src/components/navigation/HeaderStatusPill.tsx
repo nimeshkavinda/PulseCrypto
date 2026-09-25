@@ -22,7 +22,7 @@ export function HeaderStatusPill() {
   const dotColor = statusColor(tone);
 
   return (
-    <View style={styles.pill} accessibilityLabel={`Market data status: ${label}`}>
+    <View style={styles.pill} accessible accessibilityLabel={`Market data status: ${label}`}>
       <View style={[styles.dot, { backgroundColor: dotColor }]} />
       <Text style={[styles.text, { color: dotColor }]}>{label}</Text>
     </View>
