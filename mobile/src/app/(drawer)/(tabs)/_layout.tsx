@@ -41,6 +41,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        // Tabs stay mounted; freezing hidden ones stops them re-rendering on every market update.
+        freezeOnBlur: true,
         headerStyle: {
           backgroundColor: colors.surface,
           borderBottomColor: colors.border,
