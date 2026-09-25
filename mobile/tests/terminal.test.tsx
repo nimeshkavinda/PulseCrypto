@@ -2,6 +2,8 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react-native';
 import { PressureSpreadBar } from '../src/components/terminal/PressureSpreadBar';
 import { MarketDepthChart } from '../src/components/terminal/MarketDepthChart';
+import { OrderBookTable } from '../src/components/terminal/OrderBookTable';
+import { formatPrice } from '../src/utils/formatters';
 import { bannerContent, latestDataAt, MarketStatusBanner } from '../src/components/common/MarketStatusBanner';
 import { book, ticker } from './fixtures';
 import { createTestRuntime } from './runtimeHarness';
@@ -19,6 +21,41 @@ describe('PressureSpreadBar', () => {
   it('formats the spread amount in the a11y label with the pair decimals', async () => {
     await render(<PressureSpreadBar buyPressure={50} sellPressure={50} spread={0.00001} spreadPct={0.0123} priceDecimals={5} quoteAsset="USDT" />);
     expect(screen.getByLabelText('Spread 0.00001 USDT, 0.012 percent')).toBeTruthy();
+  });
+});
+
+describe('OrderBookTable', () => {
+  const levels = (start: number, step: number) =>
+    Array.from({ length: 12 }, (_, i): [number, number, number] => {
+      const price = start + i * step;
+      const qty = (i + 1) * 0.3; // never 1, so no total equals a price
+      return [price, qty, price * qty];
+    });
+
+  it('shows the top 10 bids and asks with pair decimals, and drops deeper levels', async () => {
+    const bids = levels(64000, -0.5);
+    const asks = levels(64000.5, 0.5);
+    await render(<OrderBookTable bids={bids} asks={asks} baseAsset="BTC" quoteAsset="USDT" priceDecimals={2} qtyDecimals={5} />);
+
+    expect(screen.getAllByText('PRICE (USDT)')).toHaveLength(2);
+    expect(screen.getAllByText('AMOUNT (BTC)')).toHaveLength(2);
+    for (const [price] of [...bids.slice(0, 10), ...asks.slice(0, 10)]) {
+      expect(screen.getByText(formatPrice(price, 2))).toBeTruthy();
+    }
+    for (const [price] of [...bids.slice(10), ...asks.slice(10)]) {
+      expect(screen.queryByText(formatPrice(price, 2))).toBeNull();
+    }
+    expect(screen.getAllByText((0.3).toFixed(5))).toHaveLength(2); // best bid and best ask amounts
+  });
+
+  it('updates in place when a new book arrives', async () => {
+    const first = levels(64000, -0.5);
+    const asks = levels(64000.5, 0.5);
+    const view = await render(<OrderBookTable bids={first} asks={asks} baseAsset="BTC" quoteAsset="USDT" priceDecimals={2} qtyDecimals={5} />);
+    const next = levels(63990, -0.5);
+    await view.rerender(<OrderBookTable bids={next} asks={asks} baseAsset="BTC" quoteAsset="USDT" priceDecimals={2} qtyDecimals={5} />);
+    expect(screen.getByText(formatPrice(63990, 2))).toBeTruthy();
+    expect(screen.queryByText(formatPrice(64000, 2))).toBeNull();
   });
 });
 
