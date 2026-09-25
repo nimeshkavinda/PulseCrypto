@@ -11,7 +11,7 @@ baseline_commit: '3b1d42ca81b3005b26c848c7978a8f433a37384d'
 
 ## Intent
 
-**Problem:** Code review of Phases 9–14 and device testing found medium-severity and user-visible defects. In testing, the Settings storage card did not reflect changes made elsewhere, and its buttons were misaligned.
+**Problem:** Code review and device testing found medium-severity and user-visible defects. In testing, the Settings storage card did not reflect changes made elsewhere, and its buttons were misaligned.
 
 **Approach:** Fix the medium and user-visible set in one change, as two commits (gateway + CI, then mobile), each with tests for the medium items. Low-impact items are tracked separately.
 

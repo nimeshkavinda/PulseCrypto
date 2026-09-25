@@ -278,7 +278,7 @@ Beyond capacity, production needs a standby ingestion connection (Binance limits
 
 ## 11. AI-assisted development
 
-**Tools.** Gemini for the initial phases (1–8). Claude Code (Anthropic) for phases 9–15 and for code review.
+**Tools.** Gemini 3.8 (in Antigravity), Muse Spark 1.3 (in OpenCode) and Claude Code (Anthropic), used across the project for implementation and code review.
 
 **Method (BMAD, spec-driven).** The project started from a spec: requirements, design and a phased task backlog in `docs/` (the first commit), with task IDs carried into commit messages. An agent implemented each phase against its tasks, and every phase reached `main` through a pull request. As the work grew, each phase also got a detailed change spec with a frozen intent, an edge-case matrix and a review log ([docs/specs/](docs/specs/README.md)). Independent AI review passes ran in parallel (the diff read without context, edge-case path tracing, and claims that lack a test), and a human triaged every finding. Changes were verified on both simulators, with Maestro and with frame and memory measurements, and a human decided at every checkpoint and PR.
 
