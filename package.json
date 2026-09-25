@@ -10,9 +10,9 @@
   ],
   "scripts": {
     "dev:backend": "docker compose up --build",
-    "dev:mobile": "npm --prefix mobile start",
-    "dev:mobile:ios": "npm --prefix mobile run run:ios",
-    "dev:mobile:android": "npm --prefix mobile run run:android",
+    "dev:mobile": "npm --prefix mobile start --",
+    "dev:mobile:ios": "npm --prefix mobile run run:ios --",
+    "dev:mobile:android": "npm --prefix mobile run run:android --",
     "build:shared": "npm --prefix shared run build",
     "build:backend": "npm --prefix backend run build",
     "test:shared": "npm --prefix shared run test",

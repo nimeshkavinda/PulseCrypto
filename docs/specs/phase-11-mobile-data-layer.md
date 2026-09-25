@@ -147,5 +147,5 @@ Review pass 1, 2026-09-23: blind, edge-case and verification-gap lenses.
 | 3 | The runtime passed a live Map iterator to `setChannels` (it worked only because it was consumed synchronously) | low | patch | Found by the ref-count test. It now passes an array snapshot. |
 | 4 | `useFavorites` returns a new array each render, so watchlist `renderItem` changes identity | low | defer | The watchlist is re-rendered rarely in this phase. Phase 12 memoises rows while making them live. |
 | 5 | Telemetry FPS and memory widgets still animate while unfocused | medium | defer | Scheduled as T13.2 (focus-aware sampling and the native module). |
-| 6 | `LastPriceHero` still shows the fabricated market cap | medium | defer | Scheduled as T12.4 (replaced with 24h volume). |
+| 6 | `LastPriceHero` still shows a market cap computed from static supply figures | medium | defer | Scheduled as T12.4 (replaced with 24h volume). |
 | 7 | `expo prebuild` rewrites the `android`/`ios` npm scripts | low | reject | These are local build side effects. The scripts were restored; the native directories are gitignored. |

@@ -1,463 +1,315 @@
-# PulseCrypto ⚡
+# PulseCrypto
 
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Fastify](https://img.shields.io/badge/Fastify-v5-000000?logo=fastify&logoColor=white)](https://fastify.dev/)
-[![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=black)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)](https://expo.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![MMKV](https://img.shields.io/badge/MMKV-JSI%2FNitro-FF6F00)](https://github.com/mrousavy/react-native-mmkv)
-[![Tests](https://img.shields.io/badge/Tests-120%20Passing-brightgreen?logo=vitest&logoColor=white)](https://vitest.dev/)
-[![UI Performance](https://img.shields.io/badge/FPS-60%20Sustained-00C57A)](#performance-benchmarks)
+A real-time crypto market viewer in two parts:
 
-**PulseCrypto** is a high-frequency, real-time cryptocurrency market streaming system. It continuously ingests public WebSocket depth and ticker data from Binance, batches and conflates updates in an in-memory Last-Value-Cache (LVC) with a proactive 3-tier backpressure guard, and broadcasts normalized market streams to an ultra-responsive React Native mobile terminal operating at a sustained 60 FPS.
+- **Gateway** (`backend/`): a Node.js service that ingests Binance public market streams for five USDT pairs, conflates them into the latest state in memory, and fans it out to mobile clients over one WebSocket, at most one data frame per client per 100 ms tick.
+- **App** (`mobile/`): a React Native (Expo) app with a live watchlist (search, persisted favourites, pull-to-refresh), a pair terminal (order book, spread, buy/sell pressure, depth chart), a telemetry screen and settings. It keeps working offline with the last data it received and reconnects on its own.
 
----
+**Demo recordings** (video only, driven by Maestro against the live gateway): [iOS simulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-ios.mp4) · [Android emulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-android.mp4), attached to the [v1.0.0 release](https://github.com/nimeshkavinda/PulseCrypto/releases/tag/v1.0.0). They cover the live watchlist, search, a favourite surviving a relaunch, the terminal, a pair switch, pull-to-refresh, the offline banner and automatic reconnect, a cadence change, and the telemetry screen with its overlay.
 
-## Table of Contents
+| Document | What it covers |
+|---|---|
+| [docs/protocol.md](docs/protocol.md) | The WebSocket protocol: channels, messages, cadence, flow control, limits |
+| [docs/performance.md](docs/performance.md) | Load-test and on-device measurements, with method and caveats |
+| [docs/design.md](docs/design.md) | Architecture, data flow, decision records with the alternatives rejected, scaling design |
+| [docs/requirements.md](docs/requirements.md) | Each brief requirement → where it is implemented → how it is verified |
+| [docs/tasks.md](docs/tasks.md) | The task backlog, by phase; task IDs appear in commit messages |
+| [docs/specs/](docs/specs/README.md) | The change spec behind each phase from Phase 9 on |
 
-1. [System Architecture](#system-architecture)
-2. [Stream Processing, Buffering & Backpressure Strategy](#stream-processing-buffering--backpressure-strategy)
-3. [Architecture Decision Records (ADRs)](#architecture-decision-records-adrs)
-4. [Documented Assumptions](#documented-assumptions)
-5. [Production Scaling Architecture (1,000,000+ Concurrent Users)](#production-scaling-architecture-1000000-concurrent-users)
-6. [Prerequisites & Environment Setup](#prerequisites--environment-setup)
-7. [Build & Run Instructions](#build--run-instructions)
-8. [Verification, Testing & Observability](#verification-testing--observability)
-9. [Git Workflow & Audit Trail](#git-workflow--audit-trail)
-10. [AI-Assisted Development Workflow](#ai-assisted-development-workflow)
+**Stack.** npm workspaces monorepo:
+- `shared`: the protocol and REST schemas (zod), used by both sides.
+- `backend`: Fastify 5 + `ws`, Node 20. Docker image on `node:22-alpine`.
+- `mobile`: Expo SDK 57, React Native 0.86.3, React 19.2, expo-router, zustand, Reanimated 4, FlashList 2, MMKV 4, NetInfo, plus a local Expo Module, `mobile/modules/perf-monitor` (Swift + Kotlin), for native memory and frame-rate readings.
 
 ---
 
-## System Architecture
+## 1. Quick start
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        BINANCE PUBLIC WEBSOCKET                        │
-│         wss://stream.binance.com:9443/stream?streams=...               │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Raw Ticks (depth20@100ms, !miniTicker@arr)
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                    NODE.JS GATEWAY (Fastify + ws)                      │
-│                                                                        │
-│  ┌─────────────────────────┐        ┌───────────────────────────────┐  │
-│  │ BinanceConnector        │───────>│ In-Memory LVC State           │  │
-│  │ • Reconnect with Jitter │        │ • Sub-microsecond updates     │  │
-│  │ • Heartbeat & Ping/Pong │        │ • Derived analytics (spread,  │  │
-│  └─────────────────────────┘        │   pressures, cumulative depth)│  │
-│                                     └───────────────┬───────────────┘  │
-│                                                     │ FLUSH_INTERVAL_MS│
-│                                                     │ (Default: 100ms) │
-│                                                     ▼                  │
-│  ┌─────────────────────────┐        ┌───────────────────────────────┐  │
-│  │ REST Endpoints          │        │ 3-Tier Backpressure Guard     │  │
-│  │ • GET /pairs/meta       │        │ • Healthy (<512KB): Full Book │  │
-│  │ • GET /health           │        │ • Degraded (>=512KB): Shedding│  │
-│  │ • GET /metrics (Prom)   │        │ • Critical (>=2MB): Disconnect│  │
-│  └─────────────────────────┘        └───────────────┬───────────────┘  │
-└─────────────────────────────────────────────────────┼──────────────────┘
-                                                      │ Normalized JSON
-                                                      │ WebSocket Stream
-                                                      ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                   MOBILE CLIENT (React Native / Expo)                  │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ Data & Infrastructure Layer                                      │  │
-│  │ • Resilient WebSocket Client (Heartbeat watchdog, backoff)       │  │
-│  │ • MMKV Synchronous Cache (Cold-start hydration, favorites)       │  │
-│  │ • TanStack Query v5 (Focus-aware REST polling, pull-to-refresh)  │  │
-│  └──────────────────────────────────┬───────────────────────────────┘  │
-│                                     │                                  │
-│                                     ▼                                  │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ State & Conflation Layer                                         │  │
-│  │ • In-Memory Client LVC (Decoupled high-cadence tick ingestion)   │  │
-│  │ • Throttled Render Flush Pass (Math.max(sliderMs, 250ms))        │  │
-│  │ • Split Contexts: useMarketData (flush) vs useMarketConnection   │  │
-│  └──────────────────────────────────┬───────────────────────────────┘  │
-│                                     │                                  │
-│                                     ▼                                  │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ Presentation Layer (60 FPS Native Rendering)                     │  │
-│  │ • Watchlist Screen (FlashList view recycling, LIVE/SYNCED badge) │  │
-│  │ • Pro Terminal (Order book depth bars, dual-mountain SVG chart)  │  │
-│  │ • Telemetry Dashboard (JS thread FPS gauge, true RTT ping, MMKV) │  │
-│  │ • Settings Configurator (Interactive conflation slider & toggles)│  │
-│  │ • Pro Trader Drawer (Static layout chrome per Mockup 3)          │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
+**Prerequisites:**
+- Node 20.19.4+ or 22.13+ (React Native 0.86 requires it) and npm 10+
+- Docker with Compose
+- iOS: Xcode with an iOS simulator, and CocoaPods
+- Android: Android Studio with an emulator, JDK 17 and `ANDROID_HOME` set
+- Optional: the [Maestro](https://maestro.dev) CLI for the E2E flows
+- Free ports 8080 (gateway), 9464 (metrics) and 8081 (Metro)
+
+The native `ios/` and `android/` projects are generated by the first build (`expo prebuild`) and are not committed.
+
+```bash
+npm ci                 # install all workspaces
+npm run dev:backend    # gateway in Docker on :8080 (long-running; docker compose up --build)
 ```
 
----
+In another terminal, check it is up:
 
-## Stream Processing, Buffering & Backpressure Strategy
-
-### 1. The Conflation Problem
-Cryptocurrency market data is notoriously bursty. A single trading pair can emit 50–200 depth deltas and price ticks per second during volatile market moves. Multiplying this across 5 pairs yields **250–1,000 updates/second**.
-Broadcasting every raw tick directly to a mobile device causes:
-1. **Network Buffer Saturation**: Cellular TCP buffers bloat, introducing severe head-of-line latency.
-2. **React Native Thread Choke**: The JavaScript event loop saturates deserializing JSON, starving `requestAnimationFrame` and dropping UI frame rates from 60 FPS down to <15 FPS.
-3. **Severe Device Heating**: CPU and battery usage spike rapidly.
-
-### 2. In-Memory Last-Value-Cache (LVC) Engine
-PulseCrypto solves this on the backend via a dedicated **Conflation Engine** (`backend/src/conflator.ts`):
-- Raw Binance depth events (`depth20@100ms`) and mini-ticker events (`!miniTicker@arr`) are immediately merged into an in-memory hash map (`PairState`).
-- Merging is $O(1)$ and happens in sub-microsecond V8 time without blocking the event loop.
-- The engine computes derived market metrics once per pair:
-  - **Spread**: $\text{bestAsk} - \text{bestBid}$
-  - **Spread Percentage**: $\frac{\text{spread}}{\text{bestBid}} \times 100$
-  - **Buy / Sell Pressure**: Ratio of cumulative volume across the top 10 order book levels:
-    $$\text{Buy Pressure} = \left(\frac{\sum \text{bidVol}}{\sum \text{bidVol} + \sum \text{askVol}}\right) \times 100$$
-    $$\text{Sell Pressure} = 100 - \text{Buy Pressure}$$
-  - **Cumulative Volumes**: Running cumulative volume totals computed for instant depth rendering.
-
-### 3. Server Conflation Interval
-A dedicated timer ticks at `FLUSH_INTERVAL_MS` (default: **100ms** / 10 Hz). When the timer fires, the engine snapshots the current LVC state for each pair, serializes the unified JSON payload, and broadcasts it to all connected mobile subscribers. Any updates arriving between ticks overwrite previous values in the LVC, guaranteeing that clients always receive the freshest data while never exceeding 10 updates/second per pair.
-
-### 4. 3-Tier Backpressure Guard
-Slow or congested mobile clients can accumulate unsent TCP frames in the Node.js outbound buffer. If left unchecked, this causes unbounded heap growth and eventual Out-Of-Memory (OOM) crashes.
-
-PulseCrypto enforces a **3-tier backpressure guard** based on `socket.bufferedAmount`:
-
-| Tier | Buffer Size Threshold | Action Taken | Rationale |
-|---|---|---|---|
-| **Tier 1: Healthy** | `< 512 KB` | **Full Broadcast** | Normal operation. Client receives full order book depth (bids/asks), analytics, and ticker data. |
-| **Tier 2: Degraded** | `>= 512 KB` and `< 2 MB` | **Frame Shedding** | Backpressure active. The engine sheds the heavy 20-level order book arrays and transmits **ticker-only headers**. This reduces payload size by ~85%, allowing the mobile TCP socket to drain without starving price visibility. |
-| **Tier 3: Critical** | `>= 2 MB` | **Forced Termination** | Emergency circuit breaker. Socket is closed immediately with WebSocket close code `1008 (Policy Violation: Slow Consumer)`. Protects the server process from memory exhaustion. |
-
-```ts
-// backend/src/server.ts: Outbound flow control
-const buffered = client.bufferedAmount;
-if (buffered >= 2 * 1024 * 1024) {
-  // Tier 3: Critical
-  client.close(1008, 'Slow Consumer: Buffer exceeded 2MB limit');
-} else if (buffered >= 512 * 1024) {
-  // Tier 2: Degraded (Frame Shedding)
-  const shedPayload = { ...payload, bids: [], asks: [] };
-  client.send(JSON.stringify(shedPayload));
-} else {
-  // Tier 1: Healthy
-  client.send(serializedPayload);
-}
+```bash
+curl -s localhost:8080/health       # liveness
+curl -s localhost:8080/ready        # 200 once metadata is loaded and the Binance feed is connected (live or stale)
+curl -s localhost:8080/pairs/meta   # display name, status, 24h stats for the five pairs
+curl -s 127.0.0.1:9464/metrics      # Prometheus metrics (internal port; /metrics on :8080 is 404)
 ```
 
-### 5. Client-Side Dual Cadence & Display Throttling
-In addition to the server's 100ms conflation rate, the mobile client implements an independent **Display-Side LVC** in `MarketStreamContext.tsx`:
-- Incoming WebSocket messages update an in-memory ref (`lvcRef`) synchronously.
-- A throttled render pass flushes snapshots from `lvcRef` into React state based on the user-configured throttle slider (`10ms` to `1000ms`), with a safe floor:
-  $$\text{renderInterval} = \max(\text{sliderMs}, 250\text{ms})$$
-- This dual cadence decouples network message receipt from screen redraws, ensuring that even under extreme 10ms burst testing, the UI thread maintains a silky 60 FPS without dropping frames or triggering thermal warnings.
+If `/ready` stays 503 and the gateway logs show Binance refusing requests (it answers HTTP 451 in restricted regions), the main hosts are unavailable where you are: uncomment the two `data-*.binance.vision` lines in `docker-compose.yml` and run `npm run dev:backend` again.
 
----
+Then build and launch the app (long-running: a native build, then Metro; the first run takes several minutes):
 
-## Architecture Decision Records (ADRs)
-
-### ADR 1: In-Memory Last-Value-Cache (LVC) vs. External Message Broker
-- **Context**: Binance streams emit 250–1,000 updates/sec across 5 pairs. We considered introducing an intermediate Redis pub/sub broker or Kafka topic.
-- **Decision**: Maintain the LVC in the Node.js V8 process memory using native JavaScript `Map` structures.
-- **Rationale**:
-  - In-memory updates execute in nanoseconds with zero network I/O or inter-process serialization overhead.
-  - Avoids 1–2ms of TCP roundtrip latency introduced by Redis.
-  - Ephemeral market updates do not require disk persistence; Kafka disk logging would add 5–20ms of write latency for data that is superseded within 100ms.
-
-### ADR 2: Fastify v5 & `ws` over Express & Socket.IO
-- **Context**: The gateway must distribute high-throughput WebSocket streams while serving HTTP `/pairs/meta` metadata.
-- **Decision**: Use Fastify v5 with schema-compiled JSON serialization and the lightweight `ws` WebSocket library.
-- **Rationale**:
-  - Fastify delivers ~80,000 req/s, outperforming Express's ~20,000 req/s ceiling.
-  - `ws` has zero third-party dependencies and provides direct access to `socket.bufferedAmount` for backpressure monitoring.
-  - Eliminates Socket.IO's heavy frame encapsulation and custom polling handshakes, preserving raw financial WebSocket efficiency.
-
-### ADR 3: 3-Tier Backpressure Flow Control
-- **Context**: Unreliable mobile networks (e.g. 3G/subway tunnels) can cause mobile TCP receive windows to stall, leading to outbound queue accumulation on the server.
-- **Decision**: Implement a 3-tier backpressure guard with automatic frame shedding at 512KB and connection termination at 2MB.
-- **Rationale**:
-  - Drops less critical visual depth data while preserving essential pricing continuity.
-  - Prevents slow consumers from degrading performance for healthy connected clients.
-
-### ADR 4: Dual Cadence Architecture (Server `FLUSH_INTERVAL_MS` vs. Client Slider)
-- **Context**: The assignment requirements mandate a configurable server flush interval (default 100ms), while Mockup 2 presents an in-app throttling slider (10ms–1000ms).
-- **Decision**: Decouple the two controls into a dual-cadence model:
-  - **Server-side**: `FLUSH_INTERVAL_MS` controls gateway batching and outbound broadcast frequency.
-  - **Client-side**: In-app slider adjusts the mobile client's internal display flush cadence, while also sending an informative `{ action: 'setThrottle', intervalMs }` message to the gateway.
-- **Rationale**: Fully honors the backend configuration requirements while allowing client-side customization without cross-client state collisions.
-
-### ADR 5: React Native SVG with Decoupled Redraw Cadence (over Skia)
-- **Context**: Rendering the dual-mountain Market Depth chart at high frequencies.
-- **Decision**: Use `react-native-svg` with a safety-floored redraw cadence: `chartRedrawInterval = Math.max(sliderValue, 250ms)`.
-- **Rationale**:
-  - The depth chart consists of 20–40 path coordinates, which SVG natively renders in `<0.2ms`.
-  - Avoids `@shopify/react-native-skia`'s 20MB native binary overhead.
-  - Floored redraw cadence ensures the depth chart never competes with the order book table for JS thread compute time.
-
-### ADR 6: Native Prebuild for MMKV Storage (Latest Mobile Stack)
-- **Context**: High-frequency persistence for user favorites, throttle settings, and offline market snapshot caching.
-- **Decision**: Standardize on **Expo SDK 57**, **React Native 0.86.3**, **React 19.2.3**, and `react-native-mmkv` with continuous native generation (`expo prebuild`).
-- **Rationale**:
-  - MMKV utilizes direct C++ JSI / Nitro bindings, executing reads/writes ~30x faster than legacy `AsyncStorage`.
-  - Synchronous cache reads prevent layout flicker and blank states during app cold boot.
-  - Native prebuild enables true native compilation while preserving Expo CLI convenience.
-
-### ADR 7: Expo Router & FlashList for High-Performance Mobile UI
-- **Context**: Smooth 60 FPS list scrolling and robust file-based navigation.
-- **Decision**: Adopt **Expo Router** file-based navigation (`app/`) paired with `@shopify/flash-list`.
-- **Rationale**:
-  - File-based routing declaratively separates `(drawer)` chrome and `(tabs)` navigation.
-  - `FlashList` recycles native platform views rather than unmounting/re-mounting DOM nodes, eliminating frame drops during frequent price updates.
-  - Consistent typography using `@expo-google-fonts` (`HankenGrotesk`, `Inter`, `JetBrainsMono`).
-
-### ADR 8: Display-Side LVC Conflation & Native Dev-Build Benchmarking
-- **Context**: Ingesting 50+ ticks/second on the client can trigger excessive React component renders.
-- **Decision**:
-  - Buffer incoming messages in an internal ref (`lvcRef`) and flush snapshots to React state at a controlled cadence.
-  - Split context into `useMarketData` (high-frequency payload consumer) and `useMarketConnection` (low-frequency 1Hz telemetry consumer).
-  - Benchmark performance on **native development builds** (`npx expo run:ios` / `npx expo run:android`) rather than interpreted Expo Go to ensure realistic Hermes JSI execution.
-
----
-
-## Documented Assumptions
-
-1. **Pro Trader Drawer as Static UI Chrome**:  
-   Per Mockup 3, the left drawer presents a Pro Trader profile ("Tier 3 Verified", "API Key Management", "Security Settings", "Trade History", "Support"). In accordance with the project scope, this is implemented as an aesthetic, accessible, static layout chrome without a live user authentication or KYC backend.
-
-2. **Native Mobile Adaptations of Web Telemetry Labels**:  
-   Mockup 2 displays web-centric telemetry concepts ("Hardware Acceleration", "Cache cards"). These were faithfully adapted to true native mobile counterparts:
-   - *"Hardware Acceleration: Active"* → **Hermes JSI Engine** status indicator (actively querying `HermesInternal != null` with honest `Unavailable` fallback).
-   - *"Cache Diagnostics"* → **MMKV Native Cache** stats (live key count, stored byte footprint, and measured/native status).
-   - *"System Latency"* → **True RTT Ping/Pong** latency (measured via WebSocket ping intervals, avoiding misleading server-timestamp deltas).
-   - *"Memory Footprint"* → Honest memory measurement via `HermesInternal.getAllocatedBytes()` with clear `SIMULATED` badging when runtime memory hooks are unavailable.
-
----
-
-## Production Scaling Architecture (1,000,000+ Concurrent Users)
-
-To scale PulseCrypto to 1,000,000+ concurrently connected mobile clients across global regions, the architecture cleanly decomposes into three distributed tiers:
-
-```
-                                   ┌──────────────────────┐
-                                   │   Binance Upstream   │
-                                   └──────────┬───────────┘
-                                              │
-                                   ┌──────────▼───────────┐
-                                   │  Ingestion Cluster   │ (Active-Passive / Raft)
-                                   └──────────┬───────────┘
-                                              │ Internal Ticks
-                                   ┌──────────▼───────────┐
-                                   │   NATS JetStream     │ (High-Throughput Pub/Sub)
-                                   └────┬───────────┬─────┘
-                     ┌──────────────────┘           └──────────────────┐
-                     │                                                 │
-        ┌────────────▼─────────────┐                      ┌────────────▼─────────────┐
-        │  US-East Gateway Fleet   │                      │  EU-Central Gateway Fleet │
-        │  (Fastify + ws, HPA)     │                      │  (Fastify + ws, HPA)     │
-        └────────────┬─────────────┘                      └────────────┬─────────────┘
-                     │                                                 │
-         ┌───────────▼───────────┐                         ┌───────────▼───────────┐
-         │ 500,000 Mobile Clients│                         │ 500,000 Mobile Clients│
-         └───────────────────────┘                         └───────────────────────┘
+```bash
+npm run dev:mobile:ios        # expo run:ios: builds and installs a debug build on the iOS simulator
+npm run dev:mobile:android    # expo run:android: same on the Android emulator
 ```
 
-1. **Ingestion Tier (Singleton Leader with Raft Consensus)**:
-   - A dedicated ingestion cluster connects to Binance's WebSocket streams.
-   - Using Raft leader election (or Kubernetes LeaderElection), exactly one pod maintains the active upstream connection to prevent duplicate rate-limit consumption.
-   - An active-passive failover pod hot-standby immediately resumes the connection in `<200ms` if the leader fails.
+The simulators reach the gateway with no configuration: `ws://localhost:8080/ws` on iOS, `ws://10.0.2.2:8080/ws` on the Android emulator.
 
-2. **Multicast Fan-Out Backbone (NATS JetStream)**:
-   - Ingested ticks are published to a high-performance **NATS JetStream** or **Redis 7 Cluster** subject (`market.ticks.>`).
-   - NATS processes >10,000,000 msgs/sec in memory with sub-millisecond latencies, distributing updates to hundreds of gateway pods.
+### Gateway configuration
 
-3. **Stateless Edge Gateway Fleet (Kubernetes HPA + KEDA)**:
-   - 50–100 Fastify + `ws` gateway pods deployed across regional Kubernetes clusters.
-   - Autoscaled dynamically via **KEDA** monitoring `pulsecrypto_ws_active_clients` (target: 10,000 connections/pod).
-   - Behind AWS ALB or Envoy Gateway with Layer 4 TCP proxying and TLS termination.
+Every variable has a safe default (`backend/src/config.ts`); the gateway starts with none set.
 
-4. **Graceful Connection Draining**:
-   - Kubernetes `preStop` lifecycle hooks intercept SIGTERM and gracefully drain client connections over a 60-second window:
-     - New incoming handshakes are rejected (HTTP 503).
-     - Existing clients receive a WebSocket close with a randomized reconnect delay, eliminating "Thundering Herd" reconnection storms.
-
-5. **Multi-Region Anycast Routing**:
-   - Anycast DNS (or Cloudflare Spectrum) routes mobile clients to the geographically closest edge cluster (US-East, EU-Central, AP-Southeast), maintaining `<30ms` latency worldwide.
-
----
-
-## Prerequisites & Environment Setup
-
-### Prerequisites
-- **Node.js**: `v20.x` or higher
-- **npm**: `v10.x` or higher
-- **Docker & Docker Compose**: (For containerized backend execution)
-- **Xcode & CocoaPods**: (For iOS Simulator development — macOS only)
-- **Android Studio & SDK**: (For Android Emulator development)
-
-### Environment Configuration
-The backend is configured via environment variables (or `.env` in the repository root):
-
-| Variable | Default Value | Description |
+| Variable | Default | Effect |
 |---|---|---|
-| `PORT` | `8080` | Port for Fastify HTTP and WebSocket server |
-| `HOST` | `0.0.0.0` | Host bind address |
-| `FLUSH_INTERVAL_MS` | `100` | Conflation flush interval (batch frequency) in milliseconds |
-| `BINANCE_WS_URL` | `wss://stream.binance.com:9443` | Upstream Binance WebSocket base URL |
-| `EXPO_PUBLIC_GATEWAY_URL` | `ws://localhost:8080/ws` | Gateway WebSocket URL consumed by the mobile client |
+| `FLUSH_INTERVAL_MS` | `100` | Server tick: how often frames are built (max `10000`) |
+| `WS_SOFT_LIMIT_BYTES` | `65536` | Above this socket buffer, the client's frame for that tick is skipped |
+| `WS_HARD_LIMIT_BYTES` | `1048576` | Above this, the client is closed with 1013 |
+| `WS_LAG_GRACE_MS` | `5000` | How long a client may stay above the soft limit before it is closed with 1013 |
+| `WS_MAX_PAYLOAD_BYTES` | `4096` | Largest inbound message; larger closes with 1009 |
+| `WS_MAX_CONNECTIONS` | `10000` | Connections per process; further upgrades get 503 |
+| `WS_RATE_LIMIT_BURST` / `WS_RATE_LIMIT_PER_SEC` | `20` / `10` | Inbound message token bucket; empty closes with 1008 |
+| `WS_HEARTBEAT_MS` | `30000` | Protocol ping interval; a client that misses a pong is terminated |
+| `STALE_AFTER_MS` | `3000` | A pair whose book hasn't updated for this long is reported stale |
+| `BINANCE_WS_URL` / `BINANCE_REST_URL` | `wss://stream.binance.com:9443` / `https://api.binance.com` | Upstream hosts. Where the main hosts are restricted, use `wss://data-stream.binance.vision` / `https://data-api.binance.vision` (commented out in `docker-compose.yml`) |
+| `METRICS_PORT` | `9464` | Prometheus port. Compose binds it to 127.0.0.1 only |
+| `ALLOWED_ORIGINS` | `*` | Browser origins allowed on `/ws` (and for HTTP CORS when `NODE_ENV=production`); see [Mockup deviations](#8-mockup-deviations) |
+| `PORT` / `HOST` / `NODE_ENV` | `8080` / `0.0.0.0` / `development` | Listen address; Compose sets `NODE_ENV=production` |
 
----
+To run the gateway without Docker (hot reload): `npm --prefix backend run dev`.
 
-## Build & Run Instructions
+## 2. Run on devices
 
-### 1. Install Monorepo Dependencies
-From the repository root:
-```bash
-npm install
-```
+Two kinds of native build are used below. A **debug build** loads its JavaScript from Metro and has React Native's development tooling. A **release build** bundles the JavaScript and is what the measurements in [docs/performance.md](docs/performance.md) use. Both include the app's native modules (MMKV and `perf-monitor`).
 
----
-
-### 2. Run Backend Gateway
-
-#### Option A: Via Docker Compose (Recommended)
-Builds and starts the Fastify service in a lightweight Alpine container on port `8080`:
-```bash
-npm run dev:backend
-# or directly:
-docker compose up --build
-```
-
-#### Option B: Local Node.js Development
-Runs the backend with hot-reloading via TypeScript tsx:
-```bash
-npm --prefix backend run dev
-```
-
----
-
-### 3. Run Mobile Application
-
-#### Option A: Local Native Builds (Recommended for 60 FPS & MMKV JSI)
-Compiles a standalone development build on your running emulator or simulator:
+**Debug build (primary).** `npm run dev:mobile:ios` / `dev:mobile:android` build it, install it and start Metro. Once it is installed, later sessions only need Metro; start it, then open the installed PulseCrypto app:
 
 ```bash
-# Run on iOS Simulator (macOS required)
-npm run dev:mobile:ios
-
-# Run on Android Emulator
-npm run dev:mobile:android
+npm run dev:mobile   # expo start -c (long-running)
 ```
 
-#### Option B: Expo Go
-Starts the Expo Metro bundler for rapid development:
-```bash
-npm run dev:mobile
-```
-- Press `i` to launch in the iOS Simulator.
-- Press `a` to launch in the Android Emulator.
-- **Physical Device over LAN**:
-  1. Find your machine's LAN IP: `ipconfig getifaddr en0` (macOS) or `hostname -I` (Linux).
-  2. Start with gateway override:
-     ```bash
-     EXPO_PUBLIC_GATEWAY_URL=ws://<YOUR_LAN_IP>:8080/ws npm run dev:mobile
-     ```
-  3. Scan the terminal QR code using the Expo Go camera app.
+**Expo Go (fallback).** Start Metro the same way and press `i` or `a` to open the app in Expo Go (the SDK 57 version; the CLI installs it on simulators). Expo Go can't load the app's own native code, so two things change: storage falls back to a SQLite key-value store instead of MMKV (still persistent), and the Telemetry memory/UI-FPS readings show as unavailable instead of estimating.
 
-#### Continuous Native Generation (Prebuild)
-To generate or re-sync the underlying `/android` and `/ios` project directories:
-```bash
-npm --prefix mobile run prebuild
-```
-
----
-
-## Verification, Testing & Observability
-
-### 1. Automated Test Suites
-PulseCrypto maintains a comprehensive test suite across all packages:
+**Physical device.** Point the app at your machine's LAN address when building or starting Metro; `EXPO_PUBLIC_*` values are inlined into the bundle:
 
 ```bash
-# Run full monorepo test suite (120 tests)
-npm test
-
-# Run tests per workspace
-npm --prefix shared test     # 16 tests: Zod schemas & contract validation
-npm --prefix backend test    # 23 tests: Binance ingestion, LVC conflation, backpressure
-npm --prefix mobile test     # 81 tests: Hooks, components, storage, integration
+EXPO_PUBLIC_GATEWAY_URL=ws://<LAN-IP>:8080/ws npm run dev:mobile:android -- --device   # pick the phone from the list
 ```
-
-### 2. Type Checking & Code Quality
-```bash
-# Type-check all packages
-npm run typecheck
-
-# Lint all packages
-npm run lint
-```
-
-### 3. Gateway Health & Observability Endpoints
-With the backend running on `localhost:8080`:
 
 ```bash
-# Health check & uptime
-curl -s http://localhost:8080/health | jq .
-
-# Live market pairs metadata (prices & 24h stats from Binance)
-curl -s http://localhost:8080/pairs/meta | jq .
-
-# Prometheus metrics (scrape ingestion rates, conflation latency, client counts)
-curl -s http://localhost:8080/metrics
+EXPO_PUBLIC_GATEWAY_URL=ws://<LAN-IP>:8080/ws npm run dev:mobile   # debug build already installed
 ```
 
-### 4. Key Prometheus Metrics Exposed
-- `pulsecrypto_binance_messages_total`: Total raw messages ingested from Binance streams.
-- `pulsecrypto_conflation_ticks_total`: Total conflation cycles executed.
-- `pulsecrypto_conflation_duration_ms`: Execution duration of conflation batch cycles.
-- `pulsecrypto_ws_active_clients`: Current number of connected mobile WebSocket clients.
-- `pulsecrypto_ws_broadcast_messages_total`: Total normalized messages broadcast to clients.
-- `pulsecrypto_backpressure_shed_total`: Count of Tier 2 backpressure frame shedding events.
-- `pulsecrypto_backpressure_disconnect_total`: Count of Tier 3 forced client disconnects.
+An Android phone needs USB debugging enabled; the CLI forwards Metro's port over USB. An iPhone (`npm run dev:mobile:ios -- --device`) needs a signing team set for the project in Xcode.
 
----
+The app picks its gateway in this order: the Settings override (debug builds only) → `EXPO_PUBLIC_GATEWAY_URL` → `expo.extra.gatewayUrl` → the platform default above. Android release builds allow cleartext (`ws://`) only to `localhost`, `127.0.0.1` and `10.0.2.2`; debug builds allow it everywhere, so a debug build on a phone can reach a LAN gateway.
 
-## Git Workflow & Audit Trail
+**Release builds:** `npm run dev:mobile:ios -- --configuration Release` or `npm run dev:mobile:android -- --variant release` (each builds and installs).
 
-PulseCrypto was engineered using a strict, auditable Git branching workflow. Every milestone followed a dedicated feature branch, task-ID prefixed commits, thorough pull request reviews, and annotated phase release tags:
+## 3. Testing
 
-| Phase | Branch | Pull Request | Merge Commit | Release Tag | Key Milestones Delivered |
-|---|---|---|---|---|---|
-| **Phase 1** | `phase/1-foundation` | [#1](https://github.com/nimeshkavinda/PulseCrypto/pull/1) | `6062f6b` | `phase-1-complete` | Monorepo scaffolding, Zod schemas, Fastify skeleton, BMAD framework |
-| **Phase 2** | `phase/2-backend` | [#2](https://github.com/nimeshkavinda/PulseCrypto/pull/2) | `a65cfc7` | `phase-2-complete` | Binance connector, LVC engine, 3-tier backpressure, Prometheus metrics |
-| **Phase 3** | `phase/3-mobile-shell` | [#3](https://github.com/nimeshkavinda/PulseCrypto/pull/3) | `9ec1f21` | `phase-3-complete` | Expo SDK 57 shell, design tokens, drawer navigation, Google Fonts |
-| **Phase 4** | `phase/4-watchlist` | [#4](https://github.com/nimeshkavinda/PulseCrypto/pull/4) | `9719ba1` | `phase-4-complete` | FlashList watchlist, search/filter, MMKV favorites, micro-animations |
-| **Phase 5** | `phase/5-terminal` | [#5](https://github.com/nimeshkavinda/PulseCrypto/pull/5) | `26b38fc` | `phase-5-complete` | Pro Terminal, live order book, dual-mountain SVG depth chart, thermal fix |
-| **Phase 6** | `phase/6-settings-telemetry` | [#6](https://github.com/nimeshkavinda/PulseCrypto/pull/6) | `09f9137` | `phase-6-complete` | Telemetry dashboard, FPS gauge, memory sparkline, conflation slider |
-| **Phase 7** | `phase/7-offline-resilience` | [#7](https://github.com/nimeshkavinda/PulseCrypto/pull/7) | `4f2e7b2` | `phase-7-complete` | Heartbeat watchdog, exponential backoff, MMKV cache, lifecycle guard |
-| **Phase 8** | `phase/8-deliverables` | *In Review* | *Pending* | *Pending* | Comprehensive documentation, architecture guide, demo recording |
+```bash
+npm run typecheck && npm run lint && npm test
+```
 
----
+315 tests: 29 in `shared` (protocol and REST schemas), 111 in `backend` (hub, backpressure, limits, upstream parsing, freshness, routes, and a Fastify + `ws` integration suite), 175 in `mobile` (stream client state machine, store and render isolation, screens, order book, storage, telemetry).
 
-## AI-Assisted Development Workflow
+**Offline behaviour.** With the app open:
 
-PulseCrypto was built using the **BMAD (Breakthrough Method for Agile AI-Driven Development)** framework with **Antigravity (Gemini 3.8 Flash)** and **Muse Spark 1.3 (via OpenCode harness)** as the independent code reviewer across all phase pull requests.
+```bash
+docker compose stop gateway    # app: reconnecting banner with a countdown; the last prices stay on screen
+docker compose start gateway   # app: reconnects and returns to LIVE with no user action
+```
 
-### 1. Agent Roles & Collaboration Model
-- **System Architect (`bmad-agent-architect`)**: Evaluated trade-offs, authored the initial Technical Design document (`docs/design.md`), and recorded formal Architecture Decision Records (ADRs 1–8).
-- **Product & Requirements (`bmad-spec`)**: Distilled assignment mockups and constraints into functional requirements (`docs/requirements.md`) and actionable, phased tasks (`docs/tasks.md`).
-- **Senior Developer (`bmad-agent-dev`)**: Authored clean, type-safe code adhering to strict engineering principles: zero runtime regressions, comprehensive unit test coverage, and strict dependency boundaries.
-- **Independent Code Reviewer (Muse Spark 1.3 via OpenCode harness / `bmad-review`)**: Executed rigorous, adversarial code reviews on each pull request before merging into `main`, validating architecture decisions, catching edge cases, and enforcing honesty in performance metrics.
+On Android you can also toggle airplane mode on the emulator; the watchdog notices the dead socket and the app parks offline until the network returns.
 
-### 2. Key Review Insights & Real-World Lessons Learned
-The multi-agent review process caught and eliminated critical performance and architectural pitfalls early:
-- **Phase 5 Device Heating & Thermal Saturation**:  
-  *Finding*: Unthrottled WebSocket message consumption was triggering up to 100 React state updates per second, causing device heating and dropped frames.  
-  *Resolution*: Split state context into high-frequency and low-frequency observers, introduced the display-side LVC conflation pass, and applied a 250ms render floor to the SVG depth chart.
-- **Phase 6 Telemetry Honesty**:  
-  *Finding*: Review flagged that calculating latency from server timestamp deltas conflated network transmission with batch conflation delay, and storage metrics showed simulated values without clear disclosure.  
-  *Resolution*: Upgraded latency to true WebSocket round-trip time (RTT) ping/pong every 5s; hooked memory directly to `HermesInternal.getAllocatedBytes()` with explicit `SIMULATED` badges when native hooks are unavailable.
-- **Phase 7 React `setState-in-render` Prevention**:  
-  *Finding*: Storage cache persistence called inside a functional state updater triggered cross-component render conflicts (`Cannot update TelemetryScreen while rendering MarketStreamProvider`).  
-  *Resolution*: Purified the state updater, decoupled MMKV persistence into a time-based 5-second interval, and deferred storage change dispatches via `queueMicrotask`.
+**Load test.** The production app and hub against a synthetic market, with many real `ws` clients (2% of them deliberately slow). It imports the built `shared` package, so build it once first:
 
----
+```bash
+npm run build:shared
+npm --prefix backend run loadtest -- --clients 500 --duration 10 --workers 2   # the CI smoke run
+npm --prefix backend run loadtest -- --clients 5000 --duration 30             # a full run (long-running)
+```
+
+**E2E (Maestro).** Three flows in `mobile/.maestro/`: `watchlist` (live rows, search, un-favourite, cold relaunch), `terminal` (price, pressure and spread, scrolling to the depth chart) and `offline` (airplane mode and recovery; Android only). With a gateway running and the app installed:
+
+```bash
+maestro test mobile/.maestro/                              # Android emulator or device
+maestro test --exclude-tags android-only mobile/.maestro/  # iOS simulator (no airplane-mode control)
+```
+
+Build targets and the deterministic synthetic feed are described in [mobile/.maestro/README.md](mobile/.maestro/README.md).
+
+**CI** (`.github/workflows/ci.yml`), on every push to `main` and every PR:
+- `checks`: typecheck, lint, tests.
+- `docker`: builds the gateway image and checks `/health` on the running container.
+- `loadtest-smoke`: 500 clients for 10 s; fails if fewer than 95% of healthy clients stay connected or they drop below 9 frames/s.
+- `android-e2e` (manual): builds the release APK, starts the synthetic gateway and runs the Maestro flows on an emulator.
+
+## 4. Architecture
+
+```
+               Binance: <pair>@depth20@100ms · <pair>@aggTrade · <pair>@ticker (WS)
+                        exchangeInfo · ticker/24hr (REST, at startup; exchangeInfo hourly)
+                                              │
+┌─────────────────────────────── Gateway: Node 22, Fastify 5 + ws ───────────────────────────────┐
+│  BinanceConnector ──► OrderBookManager · MetadataService       (versioned last-value caches)   │
+│   (backoff, watchdog)            │                FreshnessMonitor ──► status                  │
+│                                  ▼ every FLUSH_INTERVAL_MS (100 ms)                            │
+│                             ChannelHub ──► ClientSession × N                                   │
+│                  (serialize each changed item once)   (channels, cadence, last-sent versions,  │
+│                                                         backpressure, rate limit)              │
+│  :8080  /ws · /pairs/meta · /health · /ready                    :9464  /metrics (internal)     │
+└────────────────────────────────────────────────────────────────────────────────────────────────┘
+          │ JSON frames {v, tick, ts, msgs[]}: hello, status, tickers, book, ack, … │ GET /pairs/meta
+          ▼                                                                         ▼
+┌──────────────────────────────── App: Expo SDK 57, React Native 0.86 ───────────────────────────┐
+│  MarketStreamClient ──► MarketIngestor ──► zustand store ──► per-pair selectors ──► screens    │
+│  (state machine: backoff,   (≤ 1 commit per              (one pair's update doesn't            │
+│   NetInfo, AppState,         animation frame)              re-render another)                  │
+│   watchdog, resubscribe)                                                                       │
+│  TanStack Query: /pairs/meta, pull-to-refresh        MMKV (SQLite in Expo Go): favourites,     │
+│  perf-monitor (Swift/Kotlin): memory, UI FPS          settings, last-seen market snapshot      │
+│  Tabs: Terminal · Markets · Telemetry · Settings; drawer with static account screens           │
+└────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Each screen subscribes only to what it shows: the watchlist to `tickers`, the terminal to `tickers` plus one `book:<PAIR>`. The zod schemas in `shared/src/protocol.ts` define the protocol for both sides. The gateway validates client commands with them; the app checks incoming frames with lightweight hand-written guards (the per-tick path) and uses zod for REST responses and stored snapshots. Details: [docs/design.md](docs/design.md) and [docs/protocol.md](docs/protocol.md).
+
+## 5. Buffering, conflation & backpressure
+
+Market data is last-value data: once a newer order book exists, the older one is worthless. So the gateway conflates rather than queues, and nothing is ever queued per client. The gateway keeps the latest version of each item and sends each client what it hasn't seen yet.
+
+- **Upstream.** Binance `depth20@100ms`, `aggTrade` and `ticker` streams update versioned last-value caches (one order book and one ticker per pair). Bursts between ticks are conflated: each update overwrites the previous one.
+- **Per tick.** Every `FLUSH_INTERVAL_MS` (100 ms), `ChannelHub` serializes each changed item once. Each client gets at most one data frame per tick, containing only its subscribed channels (`tickers`, `book:<PAIR>`) whose version it hasn't seen. Clients with identical pending state share one pre-encoded buffer.
+- **Cadence.** A client can ask for a slower rate with `setCadence`. It is rounded up to a multiple of the tick and clamped between the tick and 10 s.
+- **Backpressure.** If a socket's `bufferedAmount` exceeds 64 KiB, that client's frame for this tick is skipped; the next frame it gets carries the latest state. A client that stays over the soft limit for 5 s, or goes over 1 MiB, is closed with 1013. Server memory per client is bounded by the hard limit, and a slow client never delays anyone else.
+- **Inbound.** 4 KiB max message (1009), a token bucket of 20 burst / 10 per second (1008), a connection cap (503 before the upgrade), and a 30 s heartbeat.
+- **Freshness.** Every client receives `status`: `connecting`, `live`, `stale` (with `stalePairs`) or `down`, so the app can tell "my socket is fine" apart from "the exchange feed is stale".
+- **Mobile.** The stream client is a state machine: full-jitter backoff from 1 s to 30 s with a 250 ms floor, a 10 s connect timeout, attempts reset on the first data message, NetInfo and AppState handling, and an idle watchdog. It feeds an ingestor that commits to the zustand store at most once per animation frame. Per-pair selectors mean updating one pair doesn't re-render another, and hidden tabs stay mounted but stop re-rendering until they are shown again.
+
+Measured in the load test: every slow reader was skipped and then closed, and no healthy client was lost ([docs/performance.md](docs/performance.md)).
+
+## 6. Key decisions
+
+Each is written up in [docs/design.md](docs/design.md) with its context, the alternatives rejected and the consequences.
+
+| Decision | Instead of |
+|---|---|
+| Opt-in channels with per-client versioned delta frames | Broadcasting every pair's full payload to every client |
+| Skip-and-close backpressure over a last-value cache | Per-client queues, or degrading payloads by tier |
+| `depth20@100ms` partial snapshots | Diff-depth streams synced against a REST snapshot |
+| JSON text frames | A binary encoding, or `permessage-deflate` |
+| In-process last-value cache, single gateway process | An external broker (Redis, NATS, Kafka) for the demo |
+| Fastify + `ws` | Express, Socket.IO, uWebSockets.js |
+| Server-side cadence per client (`setCadence`) | Throttling only in the app, after the bytes have arrived |
+| External store, frame-batched commits, per-pair selectors | React context/state updated per message |
+| Native builds with MMKV and a native perf module; Expo Go as fallback | Expo Go only, AsyncStorage, JS-estimated telemetry |
+| `react-native-svg` depth chart, Reanimated `scaleX` bars | Skia; animating `width` |
+
+## 7. Assumptions
+
+- Five USDT pairs: BTC, ETH, SOL, DOGE, XRP.
+- The data is public market data, so there is no authentication. TLS and auth belong at the edge (load balancer) in front of the gateway.
+- A single gateway process for the demo; [scaling](#10-scaling) covers more.
+- Freshness uses the gateway's receive time on the server and the device's receive time in the app, so clock skew between machines can't mark live data stale.
+- The app shows the top 10 levels per side; the gateway publishes 20.
+- The drawer's account items (API keys, security, trade history, support) are static screens; there are no accounts.
+
+## 8. Mockup deviations
+
+Where the app differs from the UI mockup supplied with the brief:
+
+| Mockup | Implemented | Why |
+|---|---|---|
+| Depth chart | Cumulative quantity against price | A true depth chart |
+| Cadence slider from 10 ms | Minimum is the gateway tick, 100 ms | The gateway can't emit faster than its tick, and Binance depth updates every 100 ms |
+| Market cap | 24h volume | Market cap needs off-exchange supply data |
+| "Binary Protocol Compression" | Removed | Frames are JSON text, and React Native's iOS WebSocket can't negotiate `permessage-deflate` |
+| "Adaptive Polling" | Adaptive server cadence | The app doesn't poll. When the Settings toggle is on (off by default), on cellular or metered networks it asks the gateway for `max(preference, 500 ms)` |
+| Telemetry memory/FPS | Native readings from `perf-monitor` | Measured on the device by native code; a performance overlay (toggled on Telemetry) shows them over the other screens |
+| — | `ALLOWED_ORIGINS=*` by default | The data is public and unauthenticated, and native apps send no `Origin` header. Set it when serving browsers or authenticated data |
+
+## 9. Trade-offs
+
+- **`depth20` snapshots rather than diff-depth sync:** simpler and self-healing (no sequence gaps to recover from), but no full book beyond 20 levels.
+- **JSON rather than binary:** easy to debug and inspect, but larger on the wire.
+- **An in-process last-value cache rather than a broker:** single-node simplicity; scaling out needs a fan-out tier.
+- **Skipping frames under backpressure:** freshness wins over completeness. A congested client sees fewer, current frames, never a backlog.
+- **Native builds rather than Expo Go as the primary path:** needed for the native modules, at the cost of a native build on first run.
+- **Per-screen channel subscriptions:** less bandwidth, but screens re-subscribe when they gain focus.
+
+## 10. Scaling
+
+From the load test ([docs/performance.md](docs/performance.md)), one gateway process (single-threaded Node, so CPU is of one core) on an Apple M4 Pro, with the clients on the same machine over loopback:
+
+| Clients | CPU | Tick p99 | Frame latency p99 |
+|---:|---:|---:|---:|
+| 1,000 | 16.6% | 19.3 ms | 19 ms |
+| 5,000 | 33.4% | 35.9 ms | 33 ms |
+| 10,000 | 58.4% | 73.3 ms | 59 ms |
+
+About 14.5 KB/s per client (70/30 watchlist/terminal mix); every slow reader closed and zero healthy clients lost. The largest share of busy time is socket writes (`writev`), not hub logic, so capacity grows with processes and cores rather than tuning.
+
+The practical ceiling is roughly 12–15k clients per process for this mix, and the latency figures are upper bounds because the clients compete with the gateway for CPU.
+
+**1M concurrent clients** at that rate is ~14.5 GB/s (~116 Gbit/s) of egress and, at 12–15k clients each, ~70–90 gateway processes. Egress is the cost, so the levers, in order:
+1. **Send less:** slower cadence for watchlist screens, disconnect when backgrounded (the app already does).
+2. **Encode smaller:** delta-encoded books and a compact binary encoding.
+3. **Fan out closer to users:** one ingestion service connects to Binance and publishes last values to an internal feed; stateless regional gateway replicas subscribe to it and serve clients, scaled on connection count and drained gradually on deploys.
+
+Beyond capacity, production needs a standby ingestion connection (Binance limits connections and request weight per IP, so gateways must not each connect upstream), alerting on the gateway metrics, and TLS at the edge. The full design is in [docs/design.md](docs/design.md#5-scaling-design), observability in [docs/design.md](docs/design.md#6-observability).
+
+## 11. AI-assisted development
+
+**Tools.** Gemini for the initial phases (1–8). Claude Code (Anthropic) for phases 9–15 and for code review.
+
+**Method (BMAD).** Each phase from 9 on started as a spec with a frozen intent ([docs/specs/](docs/specs/README.md)). An agent implemented it; independent AI review passes ran in parallel (the diff read without context, edge-case path tracing, and claims that lack a test); a human triaged every finding. Changes were verified on both simulators with Maestro and with frame and memory measurements, and a human decided at every checkpoint and PR.
+
+**Defects caught by review or testing**, among others:
+- The `perf-monitor` native sources were excluded by broad `ios/` / `android/` ignore rules.
+- A loopback-only cleartext config also broke debug builds on physical devices.
+- `freezeOnBlur` suspended hidden tabs and could leave the Terminal stuck, so it was replaced by a context-based pause.
+- Dev-build memory growth was traced with `heap` to React Native's debug-only Fabric leak checker; release builds stay flat.
+- The client's backoff reset could be defeated by the gateway's `hello`, so it now resets on the first data message.
+- The favourite star was unreachable by VoiceOver.
+
+**Human role.** Set the scope, made the product and security decisions, reviewed and approved the specs and PRs, and tested on devices.
+
+## 12. Git workflow
+
+- One branch per phase (`phase/<n>-<name>`), plus `fix/<topic>` branches for fixes found in review and testing.
+- Every change reaches `main` through a pull request (CI runs on every PR from Phase 14 on). PRs are merged with merge commits, so each phase stays visible in the history.
+- Conventional commits; commits that implement backlog tasks name their task IDs from [docs/tasks.md](docs/tasks.md), e.g. `feat(mobile): live watchlist rows, price flashes, freshness indicators and terminal metrics (T12.1–T12.4)`.
+
+## 13. Repository layout
+
+```
+shared/          zod schemas: protocol v1 (protocol.ts) and REST (schemas.ts)
+backend/
+  src/           binance.ts (upstream), orderbook.ts, metadata.ts, market/ (bootstrap, freshness),
+                 hub/ (ChannelHub, ClientSession), ws/, http/, config.ts, server.ts
+  scripts/loadtest/  load-test runner, client workers, synthetic-market gateway
+  tests/         Vitest unit and integration tests
+  Dockerfile
+mobile/
+  src/app/       expo-router routes: drawer + tabs (Terminal, Markets, Telemetry, Settings)
+  src/data/      stream client, runtime, ingestor, store, freshness, adaptive cadence
+  src/components/  screens and widgets
+  src/storage/   MMKV / SQLite repository
+  modules/perf-monitor/  native memory and UI FPS (Swift + Kotlin)
+  plugins/       config plugins (Android cleartext policy, iOS scene lifecycle)
+  .maestro/      E2E flows
+  tests/         jest-expo + React Native Testing Library
+docs/            protocol, performance, design, requirements, tasks, specs/
+.github/workflows/ci.yml
+docker-compose.yml
+```
 
 ## License
 
-MIT © [Nimesh Kavinda](https://github.com/nimeshkavinda)
+MIT, see [LICENSE](LICENSE).

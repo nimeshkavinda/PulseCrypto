@@ -6,7 +6,7 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 
 ## Phase 1: Foundation, Spec Documents & Shared Contracts
 - [x] **T1.1**: Initialize monorepo directory layout (`/backend`, `/shared`, `/mobile`), root `.gitignore`, root `package.json`, and Git remote configuration.
-- [x] **T1.2**: Author spec-driven documentation (`docs/requirements.md`, `docs/design.md`, `docs/tasks.md`, `GIT_WORKFLOW.md`) as the initial baseline commit on `main`.
+- [x] **T1.2**: Author spec-driven documentation (`docs/requirements.md`, `docs/design.md`, `docs/tasks.md`, `GIT_WORKFLOW.md`, later folded into the README) as the initial baseline commit on `main`.
 - [x] **T1.3**: Build `/shared` workspace with strict Zod schemas and TypeScript types for `MarketUpdatePayload`, `PairMetadata`, and `ClientCommand`, including round-trip parse unit tests.
 - [x] **T1.4**: Configure backend TypeScript, ESLint, and Vitest test runner.
 - [x] **T1.5**: Author multi-stage `Dockerfile` and minimal `docker-compose.yml` for one-command reviewer execution (`docker compose up`).
@@ -43,7 +43,7 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
 - [x] **T5.1**: Build Last Price Header component with 24h change %, 24h high/low, and connection status pill.
 - [x] **T5.2**: Build Live Order Book table (top 10 bids in green, top 10 asks in red) with animated volume depth bars.
 - [x] **T5.3**: Implement UI-thread price flash micro-animations (green for tick up, red for tick down via Reanimated).
-- [x] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with Liquidity Gap badge and Buy/Sell Pressure label. _(The planned 250 ms redraw floor was not implemented; redraw cadence is handled by the store commit cadence in T11.2, and the chart is reworked in T12.3.)_
+- [x] **T5.4**: Build Dual-Mountain Market Depth SVG area chart with Liquidity Gap badge and Buy/Sell Pressure label. _(The planned 250 ms redraw floor was not implemented; redraw cadence is handled by the store commit cadence in T11.2, and the chart is updated in T12.3.)_
 - [x] **T5.5**: Gateway Connection & Navigation Integration:
   - Wire header `LIVE` status pill to active WebSocket connectivity state.
   - Consolidate gateway URL resolution into a single reactive URL utility module (`marketApi.resolveHttpBaseUrl` vs `storage.getHttpGatewayUrl`).
@@ -81,10 +81,10 @@ This backlog maps every development task to a unique Task ID (`T<phase>.<number>
   - Setup and build/run instructions (Local and Docker).
   - Architectural decisions & ADRs (In-memory LVC, SVG vs Skia, 3-tier backpressure, client-side throttling vs server FLUSH_INTERVAL_MS, depth chart safety floor).
   - Documented Assumptions (Pro Trader drawer as static chrome, native adaptations of web telemetry labels).
-  - Git workflow audit trail (phase branches, task-ID commits, phase tags).
+  - Git workflow (phase branches, task-ID commits, phase tags).
   - At-scale production discussion (Kubernetes HPA, Redis/NATS fan-out, multi-region).
   - AI-assisted development workflow breakdown.
-- [ ] **T8.2**: Record application demonstration video/screen recording.
+- [x] **T8.2**: Record application demonstration video/screen recording. _(Done in T15.3.)_
 
 ---
 
@@ -133,6 +133,7 @@ _Defects found in code review of Phases 9–14 and in device testing, fixed in o
 - [x] **TF.3**: UI: the Settings storage card shows favourites, active pair, cadence and cached prices (exact bytes) and follows changes made elsewhere. Clear Cached Prices clears memory and storage, Reset Preferences switches the running app to BTC, and the buttons are aligned. The cadence slider no longer steals vertical scrolls and supports screen-reader increment/decrement. The terminal uses `/pairs/meta` decimals, the spread % shows two significant figures, the price no longer flashes when the first live tick replaces a REST/cached value, and the banner and status texts were corrected. Tab screens have error boundaries, telemetry sampling resets per visit and survives native errors, and the Android frame counter no longer counts the window's start frame.
 
 ## Phase 15: Documentation Updates & Deliverables
-- [ ] **T15.1**: Update the README to match the final implementation: architecture, protocol, buffering strategy, ADRs, scaling analysis, assumptions, trade-offs and AI workflow. The run instructions cover the dev build (primary) and Expo Go (secondary fallback: SQLite-backed storage, no MMKV), plus `EXPO_PUBLIC_GATEWAY_URL` for physical devices.
-- [ ] **T15.2**: Repository default branch and a fresh-clone verification.
-- [ ] **T15.3**: Screen recording (T8.2).
+- [x] **T15.1**: Update the README to match the final implementation: architecture, protocol, buffering strategy, ADRs, scaling analysis, assumptions, trade-offs and AI workflow. The run instructions cover the dev build (primary) and Expo Go (secondary fallback: SQLite-backed storage, no MMKV), plus `EXPO_PUBLIC_GATEWAY_URL` for physical devices.
+- [x] **T15.2**: Repository default branch and a fresh-clone verification.
+- [x] **T15.3**: Screen recording (T8.2): iOS simulator and Android emulator, attached to the v1.0.0 release.
+- [x] **T15.4**: `docs/design.md` (architecture, data flow, ADRs with the alternatives rejected, scaling design) and `docs/requirements.md` (brief requirement → implementation → verification). The Git workflow moves into the README.

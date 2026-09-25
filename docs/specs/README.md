@@ -21,4 +21,5 @@ Each spec records:
 | 12 | [Live watchlist and terminal improvements](./phase-12-live-watchlist-terminal.md) | done |
 | 13 | [Settings fixes, native telemetry and hardening](./phase-13-settings-native-telemetry.md) | done |
 | 14 | [CI, E2E flows and performance evidence](./phase-14-ci-e2e-performance.md) | done |
+| 15 | [Documentation and deliverables](./phase-15-docs-deliverables.md) | done |
 | – | [Fixes from review and testing](./review-and-testing-fixes.md) | done |
