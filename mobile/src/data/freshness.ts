@@ -9,31 +9,39 @@ import { useConnectionState, useUpstream } from './store/hooks';
  * - `live`: socket open, exchange feed live, pair not stale, updated within STALE_AFTER_MS.
  * - `delayed`: socket open but the exchange feed is down, this pair is listed stale, or its data is old.
  * - `cached`: values come from the on-device snapshot of an earlier session.
- * - `offline`: the app is not connected to the gateway (last values kept).
- * - `none`: nothing to show yet.
+ * - `offline`: the app is not connected to the gateway (last values kept, including REST values).
+ * - `none`: nothing to show yet, or only REST values while the stream is connecting up.
  */
 export type Freshness = 'live' | 'delayed' | 'cached' | 'offline' | 'none';
 
 export const STALE_AFTER_MS = 5000;
 
+/** `rest`: values from the `/pairs/meta` snapshot, shown until the first stream ticker. */
+export type FreshnessSource = DataOrigin | 'rest';
+
 export interface FreshnessInputs {
   pair: SupportedPairSymbol;
   connection: ConnectionState;
   upstream: UpstreamView | null;
+  /** Gateway receive time (gateway clock). */
   updatedAt: number | undefined;
-  origin: DataOrigin | undefined;
+  /** Local receive time (device clock); preferred for the age check when present. */
+  receivedAt?: number;
+  origin: FreshnessSource | undefined;
   now: number;
 }
 
-export function pairFreshness({ pair, connection, upstream, updatedAt, origin, now }: FreshnessInputs): Freshness {
-  if (!updatedAt) return 'none';
+export function pairFreshness({ pair, connection, upstream, updatedAt, receivedAt, origin, now }: FreshnessInputs): Freshness {
+  const at = receivedAt ?? updatedAt;
+  if (!origin || (origin !== 'rest' && !at)) return 'none';
   if (origin === 'cache') return 'cached';
   if (connection !== 'open') return 'offline';
+  if (origin === 'rest' || !at) return 'none';
   // Exchange feed down (or not yet up) affects every pair; a partial stall only the listed pairs.
   if (upstream && (upstream.status === 'down' || upstream.status === 'connecting' || upstream.stalePairs.includes(pair))) {
     return 'delayed';
   }
-  if (now - updatedAt > STALE_AFTER_MS) return 'delayed';
+  if (now - at > STALE_AFTER_MS) return 'delayed';
   return 'live';
 }
 
@@ -44,21 +52,23 @@ export function pairFreshness({ pair, connection, upstream, updatedAt, origin, n
 export function usePairFreshness(
   pair: SupportedPairSymbol,
   updatedAt: number | undefined,
-  origin: DataOrigin | undefined
+  origin: FreshnessSource | undefined,
+  receivedAt?: number
 ): Freshness {
   const connection = useConnectionState();
   const upstream = useUpstream();
   const [now, setNow] = useState(() => Date.now());
   // `now` only needs to be current for age checks; a timer below advances it exactly when the
-  // data would turn stale. New data (a newer `updatedAt`) is by definition fresh.
-  const freshness = pairFreshness({ pair, connection, upstream, updatedAt, origin, now });
+  // data would turn stale. New data (a newer receive time) is by definition fresh.
+  const freshness = pairFreshness({ pair, connection, upstream, updatedAt, receivedAt, origin, now });
+  const at = receivedAt ?? updatedAt;
 
   useEffect(() => {
-    if (freshness !== 'live' || !updatedAt) return;
-    const delay = Math.max(0, updatedAt + STALE_AFTER_MS - Date.now()) + 50;
+    if (freshness !== 'live' || !at) return;
+    const delay = Math.max(0, at + STALE_AFTER_MS - Date.now()) + 50;
     const id = setTimeout(() => setNow(Date.now()), delay);
     return () => clearTimeout(id);
-  }, [freshness, updatedAt]);
+  }, [freshness, at]);
 
   return freshness;
 }

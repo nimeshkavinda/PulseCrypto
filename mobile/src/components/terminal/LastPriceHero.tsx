@@ -4,7 +4,7 @@ import { SupportedPairSymbol } from '@pulsecrypto/shared';
 import { TickerView } from '../../data/store/marketStore';
 import { STALE_AFTER_MS, usePairFreshness } from '../../data/freshness';
 import { FreshnessBadge } from '../common/FreshnessBadge';
-import { PriceFlash, directionColor, usePriceDirection } from '../common/PriceFlash';
+import { PriceFlash, directionColor, flashKeyFor, usePriceDirection } from '../common/PriceFlash';
 import { colors } from '../../theme/tokens';
 import { formatAge, formatChange, formatPrice, formatTimeOfDay, formatVolume } from '../../utils/formatters';
 import { styles } from './LastPriceHero.styles';
@@ -14,6 +14,8 @@ interface LastPriceHeroProps {
   ticker: TickerView;
   /** Gateway receive time of the order book shown below, if any. */
   bookUpdatedAt: number | undefined;
+  /** Device receive time of that order book (live books only). */
+  bookReceivedAt?: number;
   priceDecimals: number;
   baseAsset: string;
 }
@@ -34,15 +36,20 @@ function useNow(enabled: boolean): number {
   return now;
 }
 
-export const LastPriceHero = React.memo(function LastPriceHero({ pair, ticker, bookUpdatedAt, priceDecimals, baseAsset }: LastPriceHeroProps) {
+export const LastPriceHero = React.memo(function LastPriceHero({ pair, ticker, bookUpdatedAt, bookReceivedAt, priceDecimals, baseAsset }: LastPriceHeroProps) {
+  // "Updated" shows the newer of ticker and book; the badge judges the price (the ticker) alone.
   const updatedAt = Math.max(ticker.updatedAt, bookUpdatedAt ?? 0);
-  const freshness = usePairFreshness(pair, updatedAt, ticker.origin);
+  const freshness = usePairFreshness(pair, ticker.updatedAt, ticker.origin, ticker.receivedAt);
   const now = useNow(freshness !== 'live');
-  const age = now - updatedAt;
+  // The age refers to the same moment as "Updated" (the newer of ticker and book), measured on the
+  // device clock via receive times; gateway times are the fallback for values without one (cache).
+  const tickerAt = ticker.receivedAt ?? ticker.updatedAt;
+  const bookAt = bookReceivedAt ?? bookUpdatedAt ?? 0;
+  const age = now - Math.max(tickerAt, bookAt);
 
   const change = formatChange(ticker.change24h);
   const changeColor = change.positive ? colors.bidGreen : colors.askRed;
-  const { direction } = usePriceDirection(pair, ticker.price);
+  const { direction } = usePriceDirection(flashKeyFor(pair, ticker.origin), ticker.price);
 
   return (
     <View style={styles.container}>
@@ -58,7 +65,7 @@ export const LastPriceHero = React.memo(function LastPriceHero({ pair, ticker, b
       </View>
 
       <View style={styles.priceRow}>
-        <PriceFlash flashKey={pair} price={ticker.price} style={styles.flashContainer}>
+        <PriceFlash flashKey={pair} source={ticker.origin} price={ticker.price} style={styles.flashContainer}>
           <Text style={[styles.heroPrice, { color: directionColor(direction, changeColor) }]}>
             ${formatPrice(ticker.price, priceDecimals)}
           </Text>

@@ -3,7 +3,7 @@ import { View, Text, LayoutChangeEvent } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Line } from 'react-native-svg';
 import { DepthTuple } from '@pulsecrypto/shared';
 import { colors } from '../../theme/tokens';
-import { formatPrice, formatVolume } from '../../utils/formatters';
+import { formatPercentSig, formatPrice, formatVolume } from '../../utils/formatters';
 import { buildDepthGeometry } from '../../utils/depthChart';
 import { styles } from './MarketDepthChart.styles';
 
@@ -97,7 +97,7 @@ export const MarketDepthChart = React.memo(function MarketDepthChart({
           <View style={styles.badgeColumn}>
             <Text style={styles.badgeTitle}>LIQUIDITY GAP</Text>
             <Text style={[styles.badgeValue, { color: gapColor }]} numberOfLines={1}>
-              {gapLabel} ({spreadPct.toFixed(2)}%)
+              {gapLabel} ({formatPercentSig(spreadPct)}%)
             </Text>
           </View>
           <View style={styles.badgeDivider} />

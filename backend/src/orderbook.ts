@@ -107,7 +107,9 @@ function deriveBook(symbol: SupportedPairSymbol, state: OrderBookState): Book {
   const bestBid = state.bids[0]?.price;
   const bestAsk = state.asks[0]?.price;
   const spread = bestBid !== undefined && bestAsk !== undefined ? Math.max(round(bestAsk - bestBid, priceDecimals), 0) : 0;
-  const spreadPct = bestBid ? round((spread / bestBid) * 100, 6) : 0;
+  // 8 decimals keeps tight spreads precise: 0.01 on a 60k BTC is 0.0000166…%, which 6 decimals
+  // would coarsen to 0.000017.
+  const spreadPct = bestBid ? round((spread / bestBid) * 100, 8) : 0;
 
   // Pressure: share of base-asset quantity resting on each side across all published levels.
   let bidQty = 0;

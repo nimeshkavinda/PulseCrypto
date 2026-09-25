@@ -11,6 +11,8 @@ export interface BinanceConnectorOptions {
   reconnectMaxDelayMs?: number;
   /** Terminate and reconnect if no message arrives for this long. Depth alone arrives every 100 ms. */
   idleTimeoutMs?: number;
+  /** Abort an opening handshake that takes longer than this (the close handler schedules a retry). */
+  handshakeTimeoutMs?: number;
   metrics?: MetricsRegistry;
 }
 
@@ -50,6 +52,7 @@ export class BinanceConnector {
   private readonly reconnectInitialDelayMs: number;
   private readonly reconnectMaxDelayMs: number;
   private readonly idleTimeoutMs: number;
+  private readonly handshakeTimeoutMs: number;
   private readonly metrics: MetricsRegistry;
 
   private onDepthHandler: DepthUpdateHandler | null = null;
@@ -61,6 +64,7 @@ export class BinanceConnector {
     this.reconnectInitialDelayMs = options.reconnectInitialDelayMs ?? 1000;
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 30000;
     this.idleTimeoutMs = options.idleTimeoutMs ?? 10000;
+    this.handshakeTimeoutMs = options.handshakeTimeoutMs ?? 10000;
     this.metrics = options.metrics ?? defaultMetrics;
     const pairs = options.pairs ?? (Object.keys(SUPPORTED_PAIRS) as SupportedPairSymbol[]);
     this.url = buildStreamUrl(options.wsBaseUrl ?? DEFAULT_BINANCE_WS_URL, pairs);
@@ -96,7 +100,7 @@ export class BinanceConnector {
 
     let ws: WebSocket;
     try {
-      ws = new WebSocket(this.url);
+      ws = new WebSocket(this.url, { handshakeTimeout: this.handshakeTimeoutMs });
     } catch {
       this.scheduleReconnect();
       return;
@@ -104,7 +108,6 @@ export class BinanceConnector {
     this.ws = ws;
 
     ws.on('open', () => {
-      this.reconnectAttempts = 0;
       this.lastMessageAt = Date.now();
       this.metrics.binanceConnectionStatus.set(1);
       this.startWatchdog();
@@ -151,14 +154,15 @@ export class BinanceConnector {
   }
 
   private handleMessage(raw: WebSocket.RawData): void {
-    let msg: { stream?: unknown; data?: Record<string, unknown> };
+    let msg: { stream?: unknown; data?: Record<string, unknown> } | null;
     try {
       msg = JSON.parse(raw.toString());
     } catch {
       this.invalid('json');
       return;
     }
-    if (typeof msg.stream !== 'string' || !msg.data || typeof msg.data !== 'object') {
+    // `null`, numbers and arrays are valid JSON but not a stream envelope.
+    if (!msg || typeof msg !== 'object' || typeof msg.stream !== 'string' || !msg.data || typeof msg.data !== 'object') {
       this.invalid('envelope');
       return;
     }
@@ -170,8 +174,18 @@ export class BinanceConnector {
       return;
     }
     const pair = symbol as SupportedPairSymbol;
-    const data = msg.data;
+    // Backoff resets on the first valid stream message, not on open (or on junk): an upstream that
+    // accepts and then closes straight away would otherwise be retried about once a second forever.
+    this.reconnectAttempts = 0;
+    try {
+      this.dispatch(pair, kind, msg.data);
+    } catch {
+      // A throwing handler must not escape the ws 'message' listener; count it and move on.
+      this.invalid('handler');
+    }
+  }
 
+  private dispatch(pair: SupportedPairSymbol, kind: string | undefined, data: Record<string, unknown>): void {
     switch (kind) {
       case 'depth20': {
         const bids = parseLevels(data.bids);

@@ -1,4 +1,4 @@
-import { DEFAULT_FAVORITES, InMemoryStorageBackend, StorageRepository, STORAGE_KEYS } from '../src/storage/storageRepository';
+import { DEFAULT_FAVORITES, InMemoryStorageBackend, StorageRepository, STORAGE_KEYS, utf8ByteLength } from '../src/storage/storageRepository';
 
 describe('StorageRepository', () => {
   it('uses MMKV (createMMKV) when the native module is available, and persists across instances', () => {
@@ -66,5 +66,24 @@ describe('StorageRepository', () => {
     s.setCadenceMs(100);
     await Promise.resolve();
     expect(favs).toHaveBeenCalledTimes(1);
+  });
+
+  it('measures stored sizes as exact UTF-8 bytes', () => {
+    expect(utf8ByteLength('abc')).toBe(3);
+    expect(utf8ByteLength('é')).toBe(2);
+    expect(utf8ByteLength('€')).toBe(3);
+    expect(utf8ByteLength('😀')).toBe(4);
+    const s = new StorageRepository(new InMemoryStorageBackend());
+    s.set('k', '€');
+    expect(s.getStorageStats().estimatedBytes).toBe(1 + utf8ByteLength('"€"'));
+  });
+
+  it('describes the stored preferences and cached prices for the Settings card', () => {
+    const s = new StorageRepository(new InMemoryStorageBackend());
+    expect(s.getStorageDetails()).toMatchObject({ favorites: DEFAULT_FAVORITES, activePair: 'BTCUSDT', cadenceMs: null, cachedPrices: null });
+    const snap = { v: 1, savedAt: 1, tickers: { BTCUSDT: {}, ETHUSDT: {} }, books: {} };
+    s.set(STORAGE_KEYS.MARKET_SNAPSHOT, snap);
+    s.setCadenceMs(250);
+    expect(s.getStorageDetails()).toMatchObject({ cadenceMs: 250, cachedPrices: { pairs: 2, bytes: JSON.stringify(snap).length } });
   });
 });

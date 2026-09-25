@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
   HOST: z.string().default('0.0.0.0'),
-  FLUSH_INTERVAL_MS: z.coerce.number().int().positive().default(100),
+  /** Server tick. Capped at the hub's 10 s max cadence so `hello` never advertises min > max. */
+  FLUSH_INTERVAL_MS: z.coerce.number().int().positive().max(10_000).default(100),
   /** Per-client socket buffer above which data frames are skipped (conflated). */
   WS_SOFT_LIMIT_BYTES: z.coerce.number().int().positive().default(64 * 1024),
   /** Per-client socket buffer above which the client is disconnected with 1013. */

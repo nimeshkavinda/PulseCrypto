@@ -10,7 +10,7 @@ import { createBinanceRestClient } from './market/binanceRest.js';
 import { MetadataBootstrap } from './market/bootstrap.js';
 import { FreshnessMonitor } from './market/freshness.js';
 import { buildMetricsApp } from './http/metrics.routes.js';
-import { Readiness } from './http/health.routes.js';
+import { upstreamReadiness } from './http/health.routes.js';
 import { config } from './config.js';
 
 /** Composition root: upstream ingestion -> market state -> channel hub -> HTTP/WS server. */
@@ -34,13 +34,7 @@ async function main() {
     heartbeatMs: config.WS_HEARTBEAT_MS,
   });
 
-  const readiness = (): Readiness => {
-    const reasons: string[] = [];
-    if (!metadata.isReady()) reasons.push('metadata not loaded');
-    const upstream = status.get().status.upstream;
-    if (upstream !== 'live' && upstream !== 'stale') reasons.push(`upstream ${upstream}`);
-    return { ready: reasons.length === 0, reasons };
-  };
+  const readiness = upstreamReadiness(metadata, () => status.get().status.upstream);
 
   const server = await buildApp({ enableLogger: true, config, metadataService: metadata, metricsRegistry: metrics, hub, readiness });
   const metricsServer = buildMetricsApp(metrics);

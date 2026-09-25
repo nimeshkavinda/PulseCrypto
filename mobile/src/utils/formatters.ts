@@ -25,6 +25,20 @@ export function formatChange(pct: number): FormattedChange {
   return { arrow: positive ? '▲' : '▼', text: `${Math.abs(pct).toFixed(2)}%`, positive };
 }
 
+/**
+ * A percentage to `sig` significant figures without exponent notation, for values that can be
+ * tiny (a BTC spread is ~0.000012%). The caller adds the "%" sign. "0" for zero.
+ */
+export function formatPercentSig(pct: number, sig = 2): string {
+  if (!Number.isFinite(pct)) return '—';
+  if (pct === 0) return '0';
+  // Decimals come from the rounded value, so a round-up across a power of ten (0.0000996 -> 0.00010,
+  // 9.96 -> 10) still shows `sig` figures.
+  const rounded = Number(pct.toPrecision(sig));
+  const decimals = Math.max(0, sig - 1 - Math.floor(Math.log10(Math.abs(rounded))));
+  return rounded.toFixed(Math.min(decimals, 20));
+}
+
 /** Local wall-clock time, HH:MM:SS (24h). */
 export function formatTimeOfDay(epochMs: number): string {
   const d = new Date(epochMs);

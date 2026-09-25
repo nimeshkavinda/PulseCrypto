@@ -1,9 +1,9 @@
 import { SupportedPairSymbol } from '@pulsecrypto/shared';
 import { MarketStreamClient, StreamClientDeps } from './stream/MarketStreamClient';
-import { createMarketStore, MarketStore } from './store/marketStore';
+import { createMarketStore, MarketState, MarketStore } from './store/marketStore';
 import { FrameScheduler, MarketIngestor } from './store/ingestor';
 import { loadSnapshot, SnapshotPersister } from './store/persistence';
-import { StorageRepository, STORAGE_KEYS } from '../storage/storageRepository';
+import { DEFAULT_ACTIVE_PAIR, StorageRepository, STORAGE_KEYS } from '../storage/storageRepository';
 import { effectiveCadence, NetworkCost } from './adaptiveCadence';
 
 export interface StreamRuntimeOptions {
@@ -28,6 +28,7 @@ export class StreamRuntime {
   private readonly channelRefs = new Map<string, number>();
   private readonly disposers: Array<() => void> = [];
   private networkCost: NetworkCost = { expensive: false, type: 'unknown' };
+  private syncScheduled = false;
 
   constructor(private readonly opts: StreamRuntimeOptions) {
     const { storage } = opts;
@@ -36,6 +37,11 @@ export class StreamRuntime {
     this.ingestor = new MarketIngestor(this.store, opts.scheduleFrame);
     this.persister = new SnapshotPersister(this.store, storage);
     this.applyCadence();
+  }
+
+  /** The storage this runtime reads preferences from and saves snapshots to. */
+  public get storage(): StorageRepository {
+    return this.opts.storage;
   }
 
   /** Requests the cadence from the user's preference, adjusted by adaptive mode on metered networks. */
@@ -80,7 +86,27 @@ export class StreamRuntime {
     this.disposers.splice(0).forEach((d) => d());
     this.client.stop();
     this.persister.stop();
+    // Flush anything still buffered for the next animation frame, so the save sees it.
+    this.ingestor.commit();
     this.persister.save();
+  }
+
+  /** Removes prices from the on-device cache, both on screen and in storage. Live entries stay. */
+  public clearCachedPrices(): void {
+    const liveOnly = <T extends { origin: string }>(entries: Partial<Record<SupportedPairSymbol, T>>) =>
+      Object.fromEntries(Object.entries(entries).filter(([, v]) => v?.origin === 'live')) as Partial<Record<SupportedPairSymbol, T>>;
+    this.store.setState((s): Partial<MarketState> => ({
+      tickers: liveOnly(s.tickers),
+      books: liveOnly(s.books),
+      cachedAt: null,
+    }));
+    this.opts.storage.delete(STORAGE_KEYS.MARKET_SNAPSHOT);
+  }
+
+  /** Restores preferences to defaults and applies the default pair to the running app now. */
+  public resetPreferences(): void {
+    this.opts.storage.resetDefaults();
+    this.setActivePair(DEFAULT_ACTIVE_PAIR);
   }
 
   /** Registers interest in channels; returns a release function. Channels stay subscribed while any holder remains. */
@@ -106,7 +132,17 @@ export class StreamRuntime {
     this.opts.storage.setActivePair(pair);
   }
 
+  /**
+   * Coalesced in a microtask: a pair switch releases `book:A` + `tickers` and acquires `book:B` +
+   * `tickers` in the same turn, so the gateway should only see the book change, not a `tickers`
+   * unsubscribe/resubscribe.
+   */
   private syncChannels(): void {
-    this.client.setChannels([...this.channelRefs.keys()]);
+    if (this.syncScheduled) return;
+    this.syncScheduled = true;
+    queueMicrotask(() => {
+      this.syncScheduled = false;
+      this.client.setChannels([...this.channelRefs.keys()]);
+    });
   }
 }

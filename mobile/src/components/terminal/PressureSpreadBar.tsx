@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
-import { formatPrice } from '../../utils/formatters';
+import { formatPercentSig, formatPrice } from '../../utils/formatters';
 
 interface PressureSpreadBarProps {
   buyPressure: number;
@@ -41,8 +41,11 @@ export const PressureSpreadBar = React.memo(function PressureSpreadBar({
       </View>
       <View style={styles.spreadRow}>
         <Text style={styles.spreadLabel}>SPREAD</Text>
-        <Text style={styles.spreadValue} accessibilityLabel={`Spread ${spread} ${quoteAsset}, ${spreadPct.toFixed(4)} percent`}>
-          {formatPrice(spread, priceDecimals)} {quoteAsset} ({spreadPct.toFixed(4)}%)
+        <Text
+          style={styles.spreadValue}
+          accessibilityLabel={`Spread ${formatPrice(spread, priceDecimals)} ${quoteAsset}, ${formatPercentSig(spreadPct)} percent`}
+        >
+          {formatPrice(spread, priceDecimals)} {quoteAsset} ({formatPercentSig(spreadPct)}%)
         </Text>
       </View>
     </View>

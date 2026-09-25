@@ -5,8 +5,12 @@ import { ConnectionSnapshot } from '../stream/MarketStreamClient';
 /** Where a value came from: this session's stream, or the on-device cache of an earlier session. */
 export type DataOrigin = 'live' | 'cache';
 
-export type TickerView = Ticker & { origin: DataOrigin };
-export type BookView = Book & { origin: DataOrigin };
+/**
+ * `receivedAt` is this device's clock when the value arrived (live values only). Freshness uses
+ * it instead of the gateway's `updatedAt`, so a device clock that is off does not skew LIVE.
+ */
+export type TickerView = Ticker & { origin: DataOrigin; receivedAt?: number };
+export type BookView = Book & { origin: DataOrigin; receivedAt?: number };
 
 export interface UpstreamView {
   status: UpstreamStatus;

@@ -1,4 +1,4 @@
-import { formatAge, formatChange, formatPrice, formatTimeOfDay, formatVolume } from '../src/utils/formatters';
+import { formatAge, formatChange, formatPercentSig, formatPrice, formatTimeOfDay, formatVolume } from '../src/utils/formatters';
 
 describe('formatters', () => {
   it('formats prices with pair precision', () => {
@@ -26,5 +26,17 @@ describe('formatters', () => {
     expect(formatAge(125_000)).toBe('2m');
     expect(formatAge(3 * 3600_000)).toBe('3h');
     expect(formatAge(50 * 3600_000)).toBe('2d');
+  });
+
+  it('formats percentages to two significant figures without exponent notation', () => {
+    expect(formatPercentSig(0.0000156)).toBe('0.000016');
+    expect(formatPercentSig(0.000012)).toBe('0.000012');
+    expect(formatPercentSig(0.0123)).toBe('0.012');
+    expect(formatPercentSig(1.234)).toBe('1.2');
+    // Rounding up across a power of ten keeps two figures.
+    expect(formatPercentSig(0.0000996)).toBe('0.00010');
+    expect(formatPercentSig(9.96)).toBe('10');
+    expect(formatPercentSig(0)).toBe('0');
+    expect(formatPercentSig(Number.NaN)).toBe('—');
   });
 });

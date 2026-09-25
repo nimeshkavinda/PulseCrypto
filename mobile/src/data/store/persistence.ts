@@ -31,8 +31,9 @@ export function loadSnapshot(storage: StorageRepository): Pick<MarketState, 'tic
   return { tickers, books, cachedAt: any ? snap.savedAt : null };
 }
 
-const strip = <T extends { origin: unknown }>(v: T) => {
-  const { origin: _origin, ...rest } = v;
+/** Drops the device-side fields; the snapshot stores wire-format values only. */
+const strip = <T extends { origin: unknown; receivedAt?: unknown }>(v: T) => {
+  const { origin: _origin, receivedAt: _receivedAt, ...rest } = v;
   return rest;
 };
 
@@ -58,7 +59,10 @@ export class SnapshotPersister {
     this.timer = null;
   }
 
-  /** Writes a snapshot if live data changed since the last save. */
+  /**
+   * Writes a snapshot if live data changed since the last save. Only live entries are written:
+   * re-saving values loaded from the cache would give them a fresh `savedAt`.
+   */
   public save(): boolean {
     const { tickers, books } = this.store.getState();
     if (tickers === this.lastSaved && books === this.lastSavedBooks) return false;
@@ -69,8 +73,8 @@ export class SnapshotPersister {
     const snapshot: SnapshotV1 = {
       v: 1,
       savedAt: this.now(),
-      tickers: Object.fromEntries(Object.values(tickers).filter(Boolean).map((t) => [t!.pair, strip(t!)])),
-      books: Object.fromEntries(Object.values(books).filter(Boolean).map((b) => [b!.pair, strip(b!)])),
+      tickers: Object.fromEntries(liveTickers.map((t) => [t.pair, strip(t)])),
+      books: Object.fromEntries(liveBooks.map((b) => [b.pair, strip(b)])),
     };
     this.storage.set(STORAGE_KEYS.MARKET_SNAPSHOT, snapshot);
     this.lastSaved = tickers;

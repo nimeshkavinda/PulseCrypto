@@ -22,16 +22,19 @@ export class MarketIngestor {
 
   constructor(
     private readonly store: MarketStore,
-    private readonly schedule: FrameScheduler = animationFrameScheduler
+    private readonly schedule: FrameScheduler = animationFrameScheduler,
+    private readonly now: () => number = Date.now
   ) {}
 
   public ingest(msgs: ServerMessage[]): void {
+    // Local receive time: freshness compares it with the local clock (see TickerView).
+    const receivedAt = this.now();
     for (const m of msgs) {
       if (m.type === 'tickers') {
-        for (const t of m.data) this.tickers.set(t.pair, { ...t, origin: 'live' });
+        for (const t of m.data) this.tickers.set(t.pair, { ...t, origin: 'live', receivedAt });
       } else if (m.type === 'book') {
         const { type: _type, ...book } = m;
-        this.books.set(book.pair, { ...book, origin: 'live' });
+        this.books.set(book.pair, { ...book, origin: 'live', receivedAt });
       } else if (m.type === 'status') {
         this.upstream = { status: m.upstream, stalePairs: m.stalePairs, since: m.since };
       }

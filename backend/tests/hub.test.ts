@@ -46,6 +46,10 @@ class FakeSocket implements HubSocket {
     (this.handlers[event] ??= []).push(listener as (...args: unknown[]) => void);
     return this;
   }
+  emitClose(): void {
+    this.readyState = CLOSED;
+    this.handlers['close']?.forEach((fn) => fn());
+  }
   receive(msg: unknown): void {
     const raw = typeof msg === 'string' ? msg : JSON.stringify(msg);
     this.handlers['message']?.forEach((fn) => fn(Buffer.from(raw)));
@@ -420,6 +424,38 @@ describe('ChannelHub', () => {
     hub.tick();
     expect(a.lastFrame().msgs.map((m) => m.type)).toEqual(['tickers']);
     expect(b.lastFrame().msgs.map((m) => m.type)).toEqual(['tickers', 'book']);
+  });
+
+  it('gives each client its own pending status when their data would otherwise share a frame', () => {
+    source.setTicker('BTCUSDT', 100);
+    const early = subscribed(['tickers']); // saw status v1 in its hello
+    source.status = { version: 2, status: { upstream: 'stale', stalePairs: ['BTCUSDT'], since: 5 } };
+    const late = subscribed(['tickers']); // saw status v2 in its hello
+    hub.tick();
+    expect(early.lastFrame().msgs.map((m) => m.type)).toEqual(['status', 'tickers']);
+    expect(early.lastFrame().msgs[0]).toMatchObject({ type: 'status', upstream: 'stale' });
+    expect(late.lastFrame().msgs.map((m) => m.type)).toEqual(['tickers']);
+
+    // Next status change: both are pending again and may share one frame.
+    source.status = { version: 3, status: { upstream: 'live', stalePairs: [], since: 6 } };
+    source.setTicker('BTCUSDT', 101);
+    hub.tick();
+    for (const s of [early, late]) {
+      expect(s.lastFrame().msgs.map((m) => m.type)).toEqual(['status', 'tickers']);
+      expect(s.lastFrame().msgs[0]).toMatchObject({ upstream: 'live' });
+    }
+  });
+
+  it('resets the lagging-clients gauge when the last client leaves', async () => {
+    source.setTicker('BTCUSDT', 100);
+    const socket = subscribed(['tickers']);
+    socket.bufferedAmount = SOFT + 1;
+    hub.tick();
+    expect(await metrics.getMetrics()).toContain('pulsecrypto_lagging_clients 1');
+    socket.emitClose();
+    expect(hub.getConnectedClientCount()).toBe(0);
+    hub.tick();
+    expect(await metrics.getMetrics()).toContain('pulsecrypto_lagging_clients 0');
   });
 
   describe('connection limits', () => {

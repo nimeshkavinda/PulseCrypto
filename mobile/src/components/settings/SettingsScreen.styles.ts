@@ -187,7 +187,7 @@ export const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
   primaryButton: {
     flex: 1,
@@ -217,14 +217,15 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
   },
+  // Same box as secondaryButton so the two sit side by side at equal width and height.
   dangerButton: {
+    flex: 1,
     backgroundColor: 'rgba(255, 59, 105, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(255, 59, 105, 0.35)',
     borderRadius: borderRadius.sm,
     paddingVertical: 10,
     alignItems: 'center',
-    marginTop: spacing.sm,
   },
   dangerButtonText: {
     fontFamily: typography.fontFamily.medium,
@@ -245,5 +246,11 @@ export const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.mono,
     fontSize: 13,
     color: colors.textPrimary,
+  },
+  /** A value that can be long (the favourites list): wraps, right-aligned, beside its label. */
+  statValueWrap: {
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: spacing.md,
   },
 });

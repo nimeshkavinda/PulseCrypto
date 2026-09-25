@@ -1,5 +1,6 @@
 import { ServerMessage } from '@pulsecrypto/shared';
 import { MarketStreamClient, SocketLike, StreamClientDeps, parseFrame } from '../src/data/stream/MarketStreamClient';
+import { ticker } from './fixtures';
 
 class FakeSocket implements SocketLike {
   readyState = 0;
@@ -136,13 +137,73 @@ describe('MarketStreamClient lifecycle', () => {
     expect(t.client.getConnection().nextRetryAt! - Date.now()).toBe(250);
   });
 
-  it('resets attempts after a successful open', () => {
+  it('resets attempts on the first market data message, not on open or control messages', () => {
     const t = setup();
     t.client.start();
     t.last().drop();
     jest.advanceTimersByTime(1000);
     t.last().open();
+    expect(t.client.getConnection()).toMatchObject({ state: 'open', attempt: 1 });
+    t.last().frame([{ type: 'status', upstream: 'live', stalePairs: [], since: 1 }]);
+    t.last().raw('garbage');
+    expect(t.client.getConnection()).toMatchObject({ state: 'open', attempt: 1 });
+    t.last().frame([{ type: 'tickers', data: [ticker('BTCUSDT', 64000)] }]);
     expect(t.client.getConnection()).toMatchObject({ state: 'open', attempt: 0 });
+  });
+
+  it('keeps growing the backoff when the gateway sends hello + status and then closes', () => {
+    const t = setup({ random: 1 });
+    t.client.start();
+    const delays: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      t.last().open();
+      t.last().frame([
+        { type: 'hello', protocol: 1, tickMs: 100, minCadenceMs: 100, maxCadenceMs: 10000, pairs: [], channels: [] },
+        { type: 'status', upstream: 'connecting', stalePairs: [], since: 1 },
+      ]);
+      t.last().drop();
+      const c = t.client.getConnection();
+      delays.push(c.nextRetryAt! - Date.now());
+      jest.advanceTimersByTime(c.nextRetryAt! - Date.now());
+    }
+    expect(delays).toEqual([1000, 2000, 4000, 8000]);
+  });
+
+  it('keeps growing the backoff when the gateway accepts and then closes without a frame', () => {
+    const t = setup({ random: 1 });
+    t.client.start();
+    const delays: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      t.last().open();
+      t.last().drop();
+      const c = t.client.getConnection();
+      delays.push(c.nextRetryAt! - Date.now());
+      jest.advanceTimersByTime(c.nextRetryAt! - Date.now());
+    }
+    expect(delays).toEqual([1000, 2000, 4000, 8000]);
+  });
+
+  it('gives up on a socket stuck connecting after the connect timeout and backs off', () => {
+    const t = setup({ random: 1 });
+    t.client.start();
+    jest.advanceTimersByTime(9_999);
+    expect(t.client.getConnection().state).toBe('connecting');
+    jest.advanceTimersByTime(1);
+    expect(t.sockets[0].closedWith).toBe(1000);
+    expect(t.client.getConnection()).toMatchObject({ state: 'backoff', attempt: 1 });
+    jest.advanceTimersByTime(1000);
+    expect(t.sockets).toHaveLength(2);
+  });
+
+  it('does not time out a socket that opened', () => {
+    const t = setup();
+    t.client.start();
+    t.last().open();
+    t.last().frame([{ type: 'pong', serverTs: 1 }]);
+    jest.advanceTimersByTime(10_000);
+    t.last().frame([{ type: 'pong', serverTs: 1 }]);
+    expect(t.client.getConnection().state).toBe('open');
+    expect(t.sockets).toHaveLength(1);
   });
 
   it('goes offline during backoff and reconnects immediately when the network returns', () => {
@@ -322,5 +383,33 @@ describe('parseFrame', () => {
       })
     );
     expect(msgs?.map((m) => m.type)).toEqual(['tickers', 'status']);
+  });
+
+  it('drops malformed ticker elements, keeps the valid ones, and counts every dropped message', () => {
+    const counters = { dropped: 0 };
+    const good = ticker('BTCUSDT', 64000);
+    const msgs = parseFrame(
+      JSON.stringify({
+        v: 1,
+        tick: 1,
+        ts: 1,
+        msgs: [
+          { type: 'tickers', data: [good, null, { ...good, pair: 'ETHUSDT', price: 'x' }, { pair: 'SOLUSDT' }] },
+          { type: 'future-thing' },
+          { type: 'tickers', data: 'nope' },
+        ],
+      }),
+      counters
+    );
+    expect(msgs).toEqual([{ type: 'tickers', data: [good] }]);
+    expect(counters.dropped).toBe(5);
+  });
+
+  it('reports dropped messages in the client stats', () => {
+    const t = setup();
+    t.client.start();
+    t.last().open();
+    t.last().frame([{ type: 'future-thing' }, { type: 'tickers', data: [{ pair: 'BTCUSDT' }] }]);
+    expect(t.client.getStats()).toMatchObject({ invalidFrames: 0, droppedMessages: 2 });
   });
 });

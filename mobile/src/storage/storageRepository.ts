@@ -107,9 +107,40 @@ export const DEFAULT_ACTIVE_PAIR: SupportedPairSymbol = 'BTCUSDT';
 
 export interface StorageStats {
   keysCount: number;
+  /** Exact UTF-8 size of the stored keys and values. */
   estimatedBytes: number;
   engine: StorageEngine;
   isPersistent: boolean;
+}
+
+/** What the Settings storage card shows: the stored preferences and the cached prices. */
+export interface StorageDetails {
+  engine: StorageEngine;
+  isPersistent: boolean;
+  favorites: SupportedPairSymbol[];
+  activePair: SupportedPairSymbol;
+  /** Preferred cadence, null for the gateway default. */
+  cadenceMs: number | null;
+  /** The saved market snapshot, or null when there is none. */
+  cachedPrices: { pairs: number; bytes: number } | null;
+}
+
+/** Byte length of a string once UTF-8 encoded (no TextEncoder dependency). */
+export function utf8ByteLength(s: string): number {
+  let bytes = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) bytes += 1;
+    else if (c < 0x800) bytes += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
+      const next = s.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4; // surrogate pair: one 4-byte code point
+        i++;
+      } else bytes += 3;
+    } else bytes += 3;
+  }
+  return bytes;
 }
 
 type Listener = () => void;
@@ -148,6 +179,11 @@ export class StorageRepository {
     } catch {
       return null;
     }
+  }
+
+  /** Whether a value is stored under `key` (no parsing). */
+  public has(key: string): boolean {
+    return this.backend.getString(key) !== undefined;
   }
 
   public set<T>(key: string, value: T): void {
@@ -268,8 +304,31 @@ export class StorageRepository {
   public getStorageStats(): StorageStats {
     const keys = this.backend.getAllKeys();
     let bytes = 0;
-    for (const k of keys) bytes += k.length + (this.backend.getString(k)?.length ?? 0);
+    for (const k of keys) bytes += utf8ByteLength(k) + utf8ByteLength(this.backend.getString(k) ?? '');
     return { keysCount: keys.length, estimatedBytes: bytes, engine: this.engine, isPersistent: this.isPersistent() };
+  }
+
+  public getStorageDetails(): StorageDetails {
+    const raw = this.backend.getString(STORAGE_KEYS.MARKET_SNAPSHOT);
+    let cachedPrices: StorageDetails['cachedPrices'] = null;
+    if (raw !== undefined) {
+      let pairs = 0;
+      try {
+        const snap = JSON.parse(raw) as { tickers?: Record<string, unknown> };
+        pairs = Object.keys(snap.tickers ?? {}).length;
+      } catch {
+        // unreadable snapshot: still report its size so it can be cleared
+      }
+      cachedPrices = { pairs, bytes: utf8ByteLength(raw) };
+    }
+    return {
+      engine: this.engine,
+      isPersistent: this.isPersistent(),
+      favorites: this.getFavorites(),
+      activePair: this.getActivePair(),
+      cadenceMs: this.getCadenceMs(),
+      cachedPrices,
+    };
   }
 }
 

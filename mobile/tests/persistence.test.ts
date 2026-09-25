@@ -36,6 +36,27 @@ describe('market snapshot persistence', () => {
     expect(persister.save()).toBe(false);
   });
 
+  it('persists only live entries, so cached values never get a fresh savedAt', () => {
+    const s = storage();
+    const store = createMarketStore({
+      tickers: {
+        BTCUSDT: { ...ticker('BTCUSDT', 100), origin: 'live', receivedAt: 7 },
+        ETHUSDT: { ...ticker('ETHUSDT', 10), origin: 'cache' },
+      },
+      books: {
+        BTCUSDT: { ...book('BTCUSDT'), origin: 'cache' },
+        SOLUSDT: { ...book('SOLUSDT'), origin: 'live' },
+      },
+    });
+    expect(new SnapshotPersister(store, s, () => 1).save()).toBe(true);
+    const saved = s.get<{ tickers: Record<string, object>; books: Record<string, object> }>(STORAGE_KEYS.MARKET_SNAPSHOT)!;
+    expect(Object.keys(saved.tickers)).toEqual(['BTCUSDT']);
+    expect(Object.keys(saved.books)).toEqual(['SOLUSDT']);
+    // Device-side fields stay on the device.
+    expect(saved.tickers.BTCUSDT).not.toHaveProperty('origin');
+    expect(saved.tickers.BTCUSDT).not.toHaveProperty('receivedAt');
+  });
+
   it('drops invalid entries and ignores unknown snapshot versions', () => {
     const s = storage();
     s.set(STORAGE_KEYS.MARKET_SNAPSHOT, {

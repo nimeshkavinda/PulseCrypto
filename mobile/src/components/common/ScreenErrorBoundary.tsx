@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { ErrorBoundaryProps } from 'expo-router';
 import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
@@ -8,6 +9,12 @@ import { colors, typography, spacing, borderRadius } from '../../theme/tokens';
  * place of the failed route). Keeps the surrounding shell alive and offers a retry.
  */
 export function ScreenErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    // An error during the first render would otherwise leave the splash screen covering this.
+    SplashScreen.hideAsync().catch(() => {});
+    console.error('[screen] render error', error);
+  }, [error]);
+
   return (
     <View style={styles.container} accessibilityRole="alert">
       <Text style={styles.title}>Something went wrong</Text>

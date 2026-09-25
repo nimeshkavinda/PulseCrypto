@@ -20,6 +20,11 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ WS_SOFT_LIMIT_BYTES: '2048', WS_HARD_LIMIT_BYTES: '1024' })).toThrow(/WS_SOFT_LIMIT_BYTES/);
   });
 
+  it('caps the tick at the 10 s maximum cadence', () => {
+    expect(loadConfig({ FLUSH_INTERVAL_MS: '10000' }).FLUSH_INTERVAL_MS).toBe(10_000);
+    expect(() => loadConfig({ FLUSH_INTERVAL_MS: '10001' })).toThrow(/FLUSH_INTERVAL_MS/);
+  });
+
   it('rejects invalid values', () => {
     expect(() => loadConfig({ FLUSH_INTERVAL_MS: '-5' })).toThrow(/Invalid environment configuration/);
   });

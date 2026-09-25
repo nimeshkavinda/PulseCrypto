@@ -62,6 +62,13 @@ describe('OrderBookManager', () => {
     expect(book.sellPressure).toBe(25);
   });
 
+  it('keeps precision for a tight spread %', () => {
+    const obm = new OrderBookManager();
+    obm.updateDepth('BTCUSDT', [[60000, 1]], [[60000.01, 1]]);
+    // 0.01 / 60000 * 100 = 0.0000166…%; 6 decimals would give 0.000017.
+    expect(obm.getBook('BTCUSDT')!.book.spreadPct).toBe(0.00001667);
+  });
+
   it('sorts sides, drops zero-quantity levels and caps depth', () => {
     const obm = new OrderBookManager();
     const bids = Array.from({ length: 35 }, (_, i) => [60000 - i * 10, 1] as [number, number]);

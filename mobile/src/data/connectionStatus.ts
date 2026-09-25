@@ -17,6 +17,8 @@ export function describeStatus(state: ConnectionState, upstream: UpstreamView | 
     case 'open':
       if (!upstream || upstream.status === 'live') return { label: 'LIVE', tone: 'live' };
       if (upstream.status === 'stale') return { label: 'DELAYED', tone: 'warn' };
+      // The gateway is up but still reaching the exchange (e.g. warming up after a restart).
+      if (upstream.status === 'connecting') return { label: 'CONNECTING', tone: 'warn' };
       return { label: 'NO FEED', tone: 'down' };
     case 'idle':
     case 'connecting':

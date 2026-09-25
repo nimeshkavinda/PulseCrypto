@@ -45,11 +45,13 @@ describe('telemetry widgets', () => {
 
 describe('ScreenErrorBoundary', () => {
   it('renders a recoverable error state with retry', async () => {
+    const log = jest.spyOn(console, 'error').mockImplementation(() => undefined); // the boundary logs the error
     const retry = jest.fn(async () => undefined);
     await render(<ScreenErrorBoundary error={new Error('boom')} retry={retry} />);
     expect(screen.getByText('Something went wrong')).toBeTruthy();
     expect(screen.getByText('boom')).toBeTruthy(); // dev builds show the message
     expect(screen.getByRole('button', { name: 'Try Again' })).toBeTruthy();
+    log.mockRestore();
   });
 });
 
