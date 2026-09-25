@@ -5,7 +5,7 @@ A real-time crypto market viewer in two parts:
 - **Gateway** (`backend/`): a Node.js service that ingests Binance public market streams for five USDT pairs, conflates them into the latest state in memory, and fans it out to mobile clients over one WebSocket, at most one data frame per client per 100 ms tick.
 - **App** (`mobile/`): a React Native (Expo) app with a live watchlist (search, persisted favourites, pull-to-refresh), a pair terminal (order book, spread, buy/sell pressure, depth chart), a telemetry screen and settings. It keeps working offline with the last data it received and reconnects on its own.
 
-**Demo recordings** (video only, driven by Maestro against the live gateway): [iOS simulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-ios.mp4) · [Android emulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-android.mp4), attached to the [v1.0.0 release](https://github.com/nimeshkavinda/PulseCrypto/releases/tag/v1.0.0). They cover the live watchlist, search, a favourite surviving a relaunch, the terminal, a pair switch, pull-to-refresh, the offline banner and automatic reconnect, a cadence change, and the telemetry screen with its overlay.
+**Demo recordings** (video only, driven by Maestro against the live gateway): [iOS simulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-ios.mp4) · [Android emulator](https://github.com/nimeshkavinda/PulseCrypto/releases/download/v1.0.0/pulsecrypto-android.mp4), attached to the [v1.0.0 release](https://github.com/nimeshkavinda/PulseCrypto/releases/tag/v1.0.0). Both start from a clean install on the defaults (100 ms cadence, BTC/USDT) and hold the live terminal with its order book and depth chart, then cover the watchlist, search, a favourite surviving a relaunch, switching to ETH/USDT and SOL/USDT, pull-to-refresh, the offline banner and automatic reconnect, and a cadence change to 500 ms and back. The iOS recording ends with the telemetry screen and the performance overlay.
 
 | Document | What it covers |
 |---|---|
@@ -20,6 +20,25 @@ A real-time crypto market viewer in two parts:
 - `shared`: the protocol and REST schemas (zod), used by both sides.
 - `backend`: Fastify 5 + `ws`, Node 20. Docker image on `node:22-alpine`.
 - `mobile`: Expo SDK 57, React Native 0.86.3, React 19.2, expo-router, zustand, Reanimated 4, FlashList 2, MMKV 4, NetInfo, plus a local Expo Module, `mobile/modules/perf-monitor` (Swift + Kotlin), for native memory and frame-rate readings.
+
+## Screenshots
+
+Release builds on the iOS simulator (iPhone 18 Pro) and the Android emulator (Pixel 10 Pro). The drawer's account pages are static.
+
+| | Terminal | Order book and depth chart | Markets | Search |
+|---|---|---|---|---|
+| **iOS** | <img src="docs/screenshots/ios/terminal.jpg" width="170" alt="Terminal, iOS"> | <img src="docs/screenshots/ios/terminal-depth.jpg" width="170" alt="Order book and depth chart, iOS"> | <img src="docs/screenshots/ios/markets.jpg" width="170" alt="Markets, iOS"> | <img src="docs/screenshots/ios/search.jpg" width="170" alt="Search, iOS"> |
+| **Android** | <img src="docs/screenshots/android/terminal.jpg" width="170" alt="Terminal, Android"> | <img src="docs/screenshots/android/terminal-depth.jpg" width="170" alt="Order book and depth chart, Android"> | <img src="docs/screenshots/android/markets.jpg" width="170" alt="Markets, Android"> | <img src="docs/screenshots/android/search.jpg" width="170" alt="Search, Android"> |
+
+| | Telemetry | Settings | Offline (gateway stopped) | Drawer |
+|---|---|---|---|---|
+| **iOS** | <img src="docs/screenshots/ios/telemetry.jpg" width="170" alt="Telemetry, iOS"> | <img src="docs/screenshots/ios/settings.jpg" width="170" alt="Settings, iOS"> | <img src="docs/screenshots/ios/offline.jpg" width="170" alt="Offline (gateway stopped), iOS"> | <img src="docs/screenshots/ios/drawer.jpg" width="170" alt="Drawer, iOS"> |
+| **Android** | <img src="docs/screenshots/android/telemetry.jpg" width="170" alt="Telemetry, Android"> | <img src="docs/screenshots/android/settings.jpg" width="170" alt="Settings, Android"> | <img src="docs/screenshots/android/offline.jpg" width="170" alt="Offline (gateway stopped), Android"> | <img src="docs/screenshots/android/drawer.jpg" width="170" alt="Drawer, Android"> |
+
+| | API Keys | Security | Trade History | Support |
+|---|---|---|---|---|
+| **iOS** | <img src="docs/screenshots/ios/api-keys.jpg" width="170" alt="API Keys, iOS"> | <img src="docs/screenshots/ios/security.jpg" width="170" alt="Security, iOS"> | <img src="docs/screenshots/ios/trade-history.jpg" width="170" alt="Trade History, iOS"> | <img src="docs/screenshots/ios/support.jpg" width="170" alt="Support, iOS"> |
+| **Android** | <img src="docs/screenshots/android/api-keys.jpg" width="170" alt="API Keys, Android"> | <img src="docs/screenshots/android/security.jpg" width="170" alt="Security, Android"> | <img src="docs/screenshots/android/trade-history.jpg" width="170" alt="Trade History, Android"> | <img src="docs/screenshots/android/support.jpg" width="170" alt="Support, Android"> |
 
 ---
 
@@ -317,7 +336,7 @@ mobile/
   plugins/       config plugins (Android cleartext policy, iOS scene lifecycle)
   .maestro/      E2E flows
   tests/         jest-expo + React Native Testing Library
-docs/            protocol, performance, design, requirements, tasks, specs/
+docs/            protocol, performance, design, requirements, tasks, specs/, screenshots/
 .github/workflows/ci.yml
 docker-compose.yml
 ```
