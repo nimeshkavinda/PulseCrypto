@@ -48,3 +48,27 @@ describe('usePerfSamples', () => {
     warn.mockRestore();
   });
 });
+
+describe('shared perf sampler', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+  });
+
+  it('keeps the native monitor running until the last consumer stops (Telemetry + overlay)', async () => {
+    const a = await renderHook(() => usePerfSamples(true));
+    const b = await renderHook(() => usePerfSamples(true));
+    expect(mockNative.startFrameMonitor).toHaveBeenCalledTimes(1);
+    await act(async () => jest.advanceTimersByTime(2000));
+    expect(b.result.current.uiFps).toBe(60);
+
+    await a.unmount();
+    expect(mockNative.stopFrameMonitor).not.toHaveBeenCalled();
+    await act(async () => jest.advanceTimersByTime(1000));
+    expect(b.result.current.memoryMb.length).toBeGreaterThan(0);
+
+    await b.unmount();
+    expect(mockNative.stopFrameMonitor).toHaveBeenCalledTimes(1);
+  });
+});

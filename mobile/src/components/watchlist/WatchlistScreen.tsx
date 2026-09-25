@@ -10,6 +10,7 @@ import { useFavorites } from '../../hooks/useFavorites';
 import { useMarket } from '../../data/store/hooks';
 import { useStreamRuntime } from '../../data/StreamProvider';
 import { useChannels } from '../../data/useChannels';
+import { ScreenActivity } from '../../data/screenActivity';
 import { MarketStatusBanner } from '../common/MarketStatusBanner';
 import { formatTimeOfDay } from '../../utils/formatters';
 import { MarketPairCard } from './MarketPairCard';
@@ -17,7 +18,19 @@ import { MarketFilterBar } from './MarketFilterBar';
 import { applyTab, buildRows, matchesQuery, MarketFilterTab, WatchRow } from './filterUtils';
 import { styles } from './WatchlistScreen.styles';
 
+/**
+ * Tabs stay mounted: while this screen is hidden its market data is read paused (no re-renders on
+ * updates), and it catches up with the latest values as soon as it is shown again.
+ */
 export function WatchlistScreen() {
+  return (
+    <ScreenActivity value={useIsFocused()}>
+      <WatchlistScreenContent />
+    </ScreenActivity>
+  );
+}
+
+function WatchlistScreenContent() {
   const router = useRouter();
   const runtime = useStreamRuntime();
   const isFocused = useIsFocused();

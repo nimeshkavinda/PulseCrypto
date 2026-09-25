@@ -96,6 +96,8 @@ export const STORAGE_KEYS = {
   GATEWAY_URL_OVERRIDE: 'pulse_gateway_url_override',
   /** Adaptive update rate: slow the stream on metered (cellular) connections. */
   ADAPTIVE_POLLING: 'pulse_adaptive_polling',
+  /** Floating UI/JS FPS + memory readout over every screen. */
+  PERF_OVERLAY: 'pulse_perf_overlay',
   MARKET_SNAPSHOT: 'pulse_market_snapshot_v1',
 } as const;
 
@@ -292,6 +294,14 @@ export class StorageRepository {
     this.set(STORAGE_KEYS.ADAPTIVE_POLLING, enabled);
   }
 
+  public getPerfOverlay(): boolean {
+    return this.get<unknown>(STORAGE_KEYS.PERF_OVERLAY) === true;
+  }
+
+  public setPerfOverlay(enabled: boolean): void {
+    this.set(STORAGE_KEYS.PERF_OVERLAY, enabled);
+  }
+
   /** Restores user preferences to defaults (keeps the market snapshot). */
   public resetDefaults(): void {
     this.setFavorites([...DEFAULT_FAVORITES]);
@@ -299,6 +309,7 @@ export class StorageRepository {
     this.setCadenceMs(null);
     this.setGatewayOverride(null);
     this.setAdaptivePolling(false);
+    this.setPerfOverlay(false);
   }
 
   public getStorageStats(): StorageStats {

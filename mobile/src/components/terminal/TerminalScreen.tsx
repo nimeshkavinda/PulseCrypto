@@ -5,6 +5,7 @@ import { SUPPORTED_PAIRS } from '@pulsecrypto/shared';
 import { useActivePair, useBook, useTicker } from '../../data/store/hooks';
 import { usePairsMetadata } from '../../hooks/usePairsMetadata';
 import { useChannels } from '../../data/useChannels';
+import { ScreenActivity } from '../../data/screenActivity';
 import { MarketStatusBanner } from '../common/MarketStatusBanner';
 import { Skeleton } from '../common/Skeleton';
 import { LastPriceHero } from './LastPriceHero';
@@ -13,7 +14,19 @@ import { OrderBookTable } from './OrderBookTable';
 import { MarketDepthChart } from './MarketDepthChart';
 import { styles } from './TerminalScreen.styles';
 
+/**
+ * Tabs stay mounted: while this screen is hidden its market data is read paused (no re-renders on
+ * updates), and it catches up with the latest values as soon as it is shown again.
+ */
 export function TerminalScreen() {
+  return (
+    <ScreenActivity value={useIsFocused()}>
+      <TerminalScreenContent />
+    </ScreenActivity>
+  );
+}
+
+function TerminalScreenContent() {
   const pair = useActivePair();
   const isFocused = useIsFocused();
   // The order book streams only while this screen is visible, and only for the active pair.

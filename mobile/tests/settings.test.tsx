@@ -9,6 +9,9 @@ import { InMemoryStorageBackend, StorageRepository, STORAGE_KEYS, utf8ByteLength
 import { createTestRuntime } from './runtimeHarness';
 import { ticker } from './fixtures';
 
+// Settings reads its tab's focus to pause while hidden; these tests render it focused.
+jest.mock('expo-router', () => ({ useIsFocused: () => true }));
+
 /** Storage listeners run in a microtask. */
 const settle = () => act(async () => {});
 

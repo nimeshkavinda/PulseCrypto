@@ -48,8 +48,11 @@ describe('StorageRepository', () => {
     expect(s.getActivePair()).toBe('BTCUSDT');
     s.setCadenceMs(250);
     expect(s.getCadenceMs()).toBe(250);
+    expect(s.getPerfOverlay()).toBe(false);
+    s.setPerfOverlay(true);
     s.resetDefaults();
     expect(s.getCadenceMs()).toBeNull();
+    expect(s.getPerfOverlay()).toBe(false);
   });
 
   it('notifies key subscribers asynchronously (never during a render)', async () => {
