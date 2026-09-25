@@ -12,6 +12,9 @@ jest.mock('../modules/perf-monitor', () => ({
     getMemoryFootprintBytes: jest.fn(() => 200 * 1024 * 1024),
   },
 }));
+let mockPath = '/';
+jest.mock('expo-router', () => ({ usePathname: () => mockPath }));
+
 const mockNative = (jest.requireMock('../modules/perf-monitor') as { PerfMonitor: Record<string, jest.Mock> }).PerfMonitor;
 
 const metrics = { frame: { x: 0, y: 0, width: 400, height: 800 }, insets: { top: 40, left: 0, right: 0, bottom: 0 } };
@@ -21,6 +24,19 @@ describe('PerfOverlay', () => {
   afterEach(() => {
     jest.useRealTimers();
     defaultStorage.setPerfOverlay(false);
+    mockPath = '/';
+  });
+
+  it('stays hidden on the Telemetry tab, which already shows the full readings', async () => {
+    mockPath = '/telemetry';
+    defaultStorage.setPerfOverlay(true);
+    await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <PerfOverlay />
+      </SafeAreaProvider>
+    );
+    await act(async () => jest.advanceTimersByTime(1000));
+    expect(screen.queryByLabelText(/^Performance:/)).toBeNull();
   });
 
   it('shows UI/JS FPS and memory only while switched on, and stops sampling when switched off', async () => {

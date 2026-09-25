@@ -1,6 +1,7 @@
 import React, { useSyncExternalStore } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import { defaultStorage, STORAGE_KEYS } from '../../storage/storageRepository';
 import { usePerfSamples } from '../telemetry/usePerfSamples';
 import { colors, typography } from '../../theme/tokens';
@@ -40,7 +41,10 @@ function OverlayReadout() {
  * be watched while it renders (e.g. the terminal under live updates). Samples only while shown.
  */
 export function PerfOverlay() {
-  return usePerfOverlayEnabled() ? <OverlayReadout /> : null;
+  const enabled = usePerfOverlayEnabled();
+  // The Telemetry tab already shows the same readings in full.
+  const onTelemetry = usePathname() === '/telemetry';
+  return enabled && !onTelemetry ? <OverlayReadout /> : null;
 }
 
 const styles = StyleSheet.create({

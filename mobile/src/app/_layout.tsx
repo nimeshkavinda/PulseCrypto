@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 import { useEffect, useState } from 'react';
+import { LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -32,6 +33,10 @@ export { ScreenErrorBoundary as ErrorBoundary } from '../components/common/Scree
 if (__DEV__) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('../devtools/reactotron');
+  // Testing offline with airplane mode also cuts a dev build off from Metro, and Expo's hot-reload
+  // client then warns that it cannot reach the dev server. That is expected while testing the app's
+  // offline handling, so keep it out of the on-screen LogBox (it still prints to the console).
+  LogBox.ignoreLogs(['Cannot connect to Expo CLI']);
 }
 
 // Keep the splash screen visible while fonts load
