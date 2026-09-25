@@ -50,7 +50,7 @@ npm --prefix backend run loadtest -- --clients 5000 --duration 30
 ## Implications for scale
 At about 14.5 KB/s per client, **1,000,000 concurrent clients means roughly 14.5 GB/s (~116 Gbit/s) of egress** and about 70–90 gateway processes at the measured per-core capacity. Egress dominates the cost, which makes these the effective levers, in order:
 1. **Send less.** Watchlist screens can request a slower cadence (e.g. `setCadence 500` → 2 frames/s), and backgrounded apps disconnect.
-2. **Encode smaller.** Delta-encode order books (changed levels only) and use a compact binary encoding. `permessage-deflate` trades CPU for bandwidth and fits the ticker channel better than the book channel.
+2. **Encode smaller.** Delta-encode order books (changed levels only) and use a compact binary encoding. `permessage-deflate` trades CPU for bandwidth, helps only clients that can negotiate it (React Native's iOS WebSocket can't), and fits the ticker channel better than the book channel.
 3. **Fan out closer to users.** Edge gateway replicas per region subscribe to a shared internal feed (see the README's scaling section).
 
 ## On device (release builds)

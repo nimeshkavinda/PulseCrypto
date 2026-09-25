@@ -44,7 +44,7 @@ context:
 - Screen reader labels carry price, change and freshness.
 
 **Never:**
-- No fabricated or estimated market values.
+- No estimated market values.
 - No change to the backend or the protocol.
 
 ## I/O & Edge-Case Matrix
