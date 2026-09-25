@@ -67,6 +67,12 @@ public class PerfMonitorModule: Module {
       self.counter.lastFps
     }
 
+    /// Not measured natively on iOS: requestAnimationFrame is driven by the display link there, so
+    /// the JS side counts rAF callbacks. -1 means "use the JS measurement".
+    Function("getJsFrameRate") { () -> Double in
+      -1
+    }
+
     OnDestroy {
       DispatchQueue.main.async { self.counter.stop() }
     }

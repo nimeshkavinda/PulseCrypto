@@ -37,7 +37,7 @@ The README has the [full diagram](../README.md#4-architecture). Components:
 | `ScreenActivity` (`data/screenActivity.ts`) | Tabs stay mounted; a hidden tab reads the store paused (no re-renders) and catches up when shown. |
 | Persistence (`storage/`, `data/store/persistence.ts`) | MMKV in dev and release builds, a SQLite key-value store in Expo Go. Favourites, settings, and a market snapshot saved every 5 s (and on stop) so a cold start or an offline session shows real, clearly labelled "last seen" data. |
 | REST (`api/`, `hooks/usePairsMetadata.ts`) | TanStack Query for `/pairs/meta`: static metadata, decimals, pull-to-refresh. Independent of the socket, so refreshing never interrupts the stream. Retries a warming-up gateway (503) for as long as it lasts. |
-| `perf-monitor` (`modules/perf-monitor/`) | Expo Module in Swift and Kotlin: process memory footprint (iOS `phys_footprint`, Android PSS) and UI-thread FPS (`CADisplayLink` / `Choreographer`). Returns null where it isn't compiled in, and the UI then says "unavailable". |
+| `perf-monitor` (`modules/perf-monitor/`) | Expo Module in Swift and Kotlin: process memory footprint (iOS `phys_footprint`, Android PSS) and UI-thread FPS (`CADisplayLink` / `Choreographer`). On Android it also measures JS-thread FPS with a per-frame probe on the JS queue, because `requestAnimationFrame` under-reports there; iOS counts rAF callbacks. Returns null where it isn't compiled in, and the UI then says "unavailable". |
 
 ## 3. Data flow
 

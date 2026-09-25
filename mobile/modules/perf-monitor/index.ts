@@ -8,6 +8,12 @@ interface PerfMonitorNative {
   stopFrameMonitor(): void;
   /** Frames per second over the last completed 1 s window; 0 until a window completes. */
   getUiFrameRate(): number;
+  /**
+   * Frames per second in which the JS thread was free to serve a frame (Android), over the last
+   * window; 0 until a window completes. -1 where it isn't measured natively (iOS): count
+   * requestAnimationFrame callbacks instead.
+   */
+  getJsFrameRate(): number;
 }
 
 /**

@@ -4,7 +4,11 @@ import { PerfMonitor } from '../../../modules/perf-monitor';
 export interface PerfSamples {
   /** UI (main) thread frames per second from the native frame monitor; null if unavailable. */
   uiFps: number | null;
-  /** JS thread frames per second (requestAnimationFrame callbacks per second). */
+  /**
+   * JS thread frames per second: frames the JS thread was free to serve (Android, measured
+   * natively), or requestAnimationFrame callbacks per second (iOS, and wherever the native probe
+   * is unavailable).
+   */
   jsFps: number | null;
   /** Process memory footprint history in MB (oldest first); empty if unavailable. */
   memoryMb: number[];
@@ -73,23 +77,48 @@ class PerfSampler {
       }
     };
 
+    // rAF counting is the fallback JS measurement. It stops once the native module reports its own
+    // JS frame rate (Android), where rAF delivery under-reports, and restarts if that reading fails.
     let jsFrames = 0;
     let raf = 0;
+    let rafRunning = false;
     const loop = () => {
       jsFrames++;
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
+    const startRaf = () => {
+      if (rafRunning) return;
+      rafRunning = true;
+      jsFrames = 0;
+      raf = requestAnimationFrame(loop);
+    };
+    const stopRaf = () => {
+      rafRunning = false;
+      cancelAnimationFrame(raf);
+    };
+    startRaf();
     callNative((m) => m.startFrameMonitor());
 
     // Monotonic clock: a wall-clock adjustment must not produce negative or infinite rates.
     let last = performance.now();
     const id = setInterval(() => {
       const now = performance.now();
-      const jsFps = Math.round((jsFrames * 1000) / Math.max(1, now - last));
+      const rafFps = Math.round((jsFrames * 1000) / Math.max(1, now - last));
       jsFrames = 0;
       last = now;
       const ui = callNative((m) => m.getUiFrameRate());
+      const nativeJs = callNative((m) => m.getJsFrameRate());
+      let jsFps: number | null;
+      if (nativeJs !== null && nativeJs >= 0) {
+        stopRaf();
+        jsFps = nativeJs > 0 ? Math.round(nativeJs) : null;
+      } else if (rafRunning) {
+        jsFps = rafFps;
+      } else {
+        // The native reading just failed: fall back to rAF, which reports from the next window.
+        startRaf();
+        jsFps = null;
+      }
       const bytes = callNative((m) => m.getMemoryFootprintBytes());
       this.publish({
         jsFps,
@@ -101,7 +130,7 @@ class PerfSampler {
     }, 1000);
 
     this.stopRun = () => {
-      cancelAnimationFrame(raf);
+      stopRaf();
       clearInterval(id);
       // Always stop the native monitor, even after a failed call switched readings off: otherwise
       // the Android Choreographer callback keeps running.

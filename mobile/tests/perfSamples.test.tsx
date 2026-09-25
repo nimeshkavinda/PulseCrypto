@@ -6,6 +6,7 @@ jest.mock('../modules/perf-monitor', () => ({
     startFrameMonitor: jest.fn(),
     stopFrameMonitor: jest.fn(),
     getUiFrameRate: jest.fn(() => 60),
+    getJsFrameRate: jest.fn(() => -1),
     getMemoryFootprintBytes: jest.fn(() => 100 * 1024 * 1024),
   },
 }));
@@ -17,6 +18,7 @@ describe('usePerfSamples', () => {
     jest.useRealTimers();
     jest.clearAllMocks();
     mockNative.getUiFrameRate.mockImplementation(() => 60);
+    mockNative.getJsFrameRate.mockImplementation(() => -1);
   });
 
   it('samples only while enabled and starts each session from empty history', async () => {
@@ -46,6 +48,33 @@ describe('usePerfSamples', () => {
     await unmount();
     expect(mockNative.stopFrameMonitor.mock.calls.length).toBe(stopsBefore + 1);
     warn.mockRestore();
+  });
+});
+
+describe('JS frame rate source', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+    mockNative.getJsFrameRate.mockImplementation(() => -1);
+  });
+
+  it('uses the native JS-thread reading where the platform provides one (Android) and stops counting rAF', async () => {
+    mockNative.getJsFrameRate.mockImplementation(() => 58.6);
+    const cancel = jest.spyOn(global, 'cancelAnimationFrame');
+    const { result, unmount } = await renderHook(() => usePerfSamples(true));
+    await act(async () => jest.advanceTimersByTime(2000));
+    expect(result.current.jsFps).toBe(59);
+    expect(cancel).toHaveBeenCalled();
+    await unmount();
+    cancel.mockRestore();
+  });
+
+  it('counts requestAnimationFrame callbacks where the native reading is not measured (iOS)', async () => {
+    const { result, unmount } = await renderHook(() => usePerfSamples(true));
+    await act(async () => jest.advanceTimersByTime(2000));
+    expect(result.current.jsFps).toBeGreaterThan(0);
+    await unmount();
   });
 });
 

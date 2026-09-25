@@ -67,6 +67,7 @@ The app was measured on release builds only. Debug builds carry React Native's d
   - Device: Pixel 10 Pro emulator, API 37, 60 Hz, host-GPU rendering on an Apple M4 Pro.
   - Tool: `dumpsys gfxinfo` over a 60 s window per screen.
   - Control: each capture is bracketed by scrolling the system Settings app. A capture counts only if the controls on both sides are clean.
+  - JS thread: the Telemetry counter's per-frame probe. Each UI frame posts one task to the JS thread's queue; the frame counts if the JS thread runs it within that frame. Readings are the performance overlay, six samples 5 s apart.
 - **iOS:**
   - Build: Release configuration on the iOS 27 simulator (iPhone 18 Pro).
   - Memory: `footprint` (`phys_footprint`, the figure Xcode reports).
@@ -89,9 +90,15 @@ The app was measured on release builds only. Debug builds carry React Native's d
 
 ### JS thread
 - **iOS release:** the JS thread holds 60 fps while ingesting 20 frames/s (30 msgs/s, 38 KB/s).
-- **Android release, on the emulator:** it measured 31 fps under the same burst, with the UI thread at 60 fps. Scrolling and animation stay on the UI thread, so they stay smooth, but the JS thread is at its limit there.
-  - The production cadence is half this rate.
-  - Watchlist users can request a slower cadence (`setCadence`).
+- **Android release, on the emulator (Terminal):**
+
+  | Feed | UI thread | JS thread |
+  |---|---:|---:|
+  | 20 frames/s burst | 60 fps | 39–42 fps |
+  | Live Binance at the production 100 ms cadence | 60 fps | 51–60 fps |
+
+  Under the burst, about a third of frames find the JS thread still busy with the previous update. Scrolling and animation run on the UI thread, which stays at 60. Watchlist users can also request a slower cadence (`setCadence`).
+- **Why Android isn't counted with `requestAnimationFrame`:** React Native on Android fires a rAF callback only on a frame whose vsync timestamp is later than the callback's registration. When frame callbacks run late relative to their timestamps, as on the emulator, rAF lands on every other vsync. It read 29–30 fps even on an idle screen with the JS thread about 2% busy, so it measured delivery, not load.
 
 ### Memory
 

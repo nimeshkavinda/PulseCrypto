@@ -9,6 +9,7 @@ jest.mock('../modules/perf-monitor', () => ({
     startFrameMonitor: jest.fn(),
     stopFrameMonitor: jest.fn(),
     getUiFrameRate: jest.fn(() => 60),
+    getJsFrameRate: jest.fn(() => -1),
     getMemoryFootprintBytes: jest.fn(() => 200 * 1024 * 1024),
   },
 }));
