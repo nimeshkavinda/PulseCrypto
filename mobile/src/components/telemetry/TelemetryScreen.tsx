@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from 'expo-router';
 import { useSettings } from '../../hooks/useSettings';
@@ -12,6 +12,8 @@ import { currentGatewayConfig } from '../../config/gateway';
 import { CircularFpsGauge } from './CircularFpsGauge';
 import { MemorySparkline } from './MemorySparkline';
 import { usePerfSamples } from './usePerfSamples';
+import { usePerfOverlayEnabled } from '../common/PerfOverlay';
+import { defaultStorage } from '../../storage/storageRepository';
 import { colors } from '../../theme/tokens';
 import { STORAGE_ENGINE_LABEL } from '../../storage/engineLabel';
 import { styles } from './TelemetryScreen.styles';
@@ -24,6 +26,7 @@ export function TelemetryScreen() {
   useChannels(['tickers', `book:${pair}`], isFocused);
   const { rates, reset } = useStreamStats(isFocused);
   const perf = usePerfSamples(isFocused);
+  const overlayEnabled = usePerfOverlayEnabled();
   const connection = useConnection();
   const status = describeStatus(connection.state, useUpstream());
   const { storageStats } = useSettings();
@@ -90,9 +93,22 @@ export function TelemetryScreen() {
           </View>
         </View>
 
-        {/* 1. Circular JS Thread FPS Gauge */}
+        {/* 1. Frame rate gauge (UI thread, with the JS thread beneath) */}
         <View style={styles.metricBox}>
           <CircularFpsGauge uiFps={perf.uiFps} jsFps={perf.jsFps} nativeAvailable={perf.nativeAvailable} />
+          {/* This tab measures itself; the overlay shows the same readings over any screen, e.g. the terminal. */}
+          <View style={styles.overlayRow}>
+            <View style={styles.overlayTextColumn}>
+              <Text style={styles.overlayTitle}>Show on every screen</Text>
+              <Text style={styles.overlayHint}>A floating FPS and memory readout, to watch the terminal while it renders</Text>
+            </View>
+            <Switch
+              value={overlayEnabled}
+              onValueChange={(v) => defaultStorage.setPerfOverlay(v)}
+              trackColor={{ false: colors.border, true: colors.bidGreen }}
+              accessibilityLabel="Show performance overlay on every screen"
+            />
+          </View>
         </View>
 
         {/* 2. WS Message Ingestion Rate */}

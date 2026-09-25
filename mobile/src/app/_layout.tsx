@@ -25,6 +25,7 @@ import {
 } from '@expo-google-fonts/jetbrains-mono';
 
 import { StreamProvider } from '../data/StreamProvider';
+import { PerfOverlay } from '../components/common/PerfOverlay';
 export { ScreenErrorBoundary as ErrorBoundary } from '../components/common/ScreenErrorBoundary';
 
 // Development tooling only: constant-folded out of release bundles.
@@ -79,6 +80,7 @@ export default function RootLayout() {
           <StreamProvider>
             <StatusBar style="light" />
             <Slot />
+            <PerfOverlay />
           </StreamProvider>
         </SafeAreaProvider>
       </QueryClientProvider>

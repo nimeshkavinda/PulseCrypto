@@ -96,6 +96,30 @@ export const styles = StyleSheet.create({
     marginBottom: 10,
     alignItems: 'center',
   },
+  overlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+  },
+  overlayTextColumn: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  overlayTitle: {
+    fontFamily: typography.fontFamily.medium,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  overlayHint: {
+    fontFamily: typography.fontFamily.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   ingestionIconBox: {
     width: 32,
     height: 32,
