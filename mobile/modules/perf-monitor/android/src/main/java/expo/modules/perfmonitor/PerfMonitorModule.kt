@@ -27,6 +27,7 @@ private class FrameCounter : Choreographer.FrameCallback {
   private var frames = 0
   private var windowStartNanos = 0L
   private var lastFrameNanos = 0L
+  private var frameIntervalNanos = DEFAULT_FRAME_NANOS
   private val jsFrames = AtomicInteger(0)
   private val probePending = AtomicBoolean(false)
 
@@ -37,9 +38,9 @@ private class FrameCounter : Choreographer.FrameCallback {
   var lastFps = 0.0
     private set
 
-  /** JS frames per second over the last window; 0 until a window completes, -1 without a JS queue. */
+  /** JS frames per second over the last window; NO_WINDOW until one completes, -1 without a JS queue. */
   @Volatile
-  var lastJsFps = -1.0
+  var lastJsFps = NOT_MEASURED
     private set
 
   fun start() {
@@ -48,8 +49,11 @@ private class FrameCounter : Choreographer.FrameCallback {
     frames = 0
     windowStartNanos = 0L
     lastFrameNanos = 0L
+    frameIntervalNanos = DEFAULT_FRAME_NANOS
     jsFrames.set(0)
-    lastJsFps = if (jsQueue == null) -1.0 else 0.0
+    // A probe dropped during a previous run's teardown must not block this run's probes.
+    probePending.set(false)
+    lastJsFps = if (jsQueue == null) NOT_MEASURED else NO_WINDOW
     Choreographer.getInstance().postFrameCallback(this)
   }
 
@@ -57,20 +61,21 @@ private class FrameCounter : Choreographer.FrameCallback {
     running = false
     Choreographer.getInstance().removeFrameCallback(this)
     lastFps = 0.0
-    lastJsFps = if (jsQueue == null) -1.0 else 0.0
+    lastJsFps = if (jsQueue == null) NOT_MEASURED else NO_WINDOW
   }
 
   override fun doFrame(frameTimeNanos: Long) {
     if (!running) return
     Choreographer.getInstance().postFrameCallback(this)
-    probeJs(frameTimeNanos)
     if (windowStartNanos == 0L) {
       // The first callback only opens the window: counting it too gave N + 1 frames per N
       // intervals (61 FPS on a 60 Hz display in the first window).
       windowStartNanos = frameTimeNanos
       jsFrames.set(0)
+      probeJs(frameTimeNanos)
       return
     }
+    probeJs(frameTimeNanos)
     frames++
     val elapsed = frameTimeNanos - windowStartNanos
     if (elapsed >= 1_000_000_000L) {
@@ -83,8 +88,14 @@ private class FrameCounter : Choreographer.FrameCallback {
 
   private fun probeJs(frameTimeNanos: Long) {
     val queue = jsQueue ?: return
-    val interval = if (lastFrameNanos == 0L) 16_666_667L else (frameTimeNanos - lastFrameNanos).coerceIn(8_000_000L, 34_000_000L)
+    // The deadline is the display's frame period: the shortest interval seen, so a dropped UI frame
+    // (a 33 ms gap) doesn't loosen it.
+    if (lastFrameNanos != 0L) {
+      val delta = frameTimeNanos - lastFrameNanos
+      if (delta in MIN_FRAME_NANOS until frameIntervalNanos) frameIntervalNanos = delta
+    }
     lastFrameNanos = frameTimeNanos
+    val interval = frameIntervalNanos
     // One probe in flight at most: while the JS thread is busy, the frames it misses aren't counted.
     if (!probePending.compareAndSet(false, true)) return
     val posted = System.nanoTime()
@@ -93,6 +104,13 @@ private class FrameCounter : Choreographer.FrameCallback {
       probePending.set(false)
     }
     if (!queued) probePending.set(false)
+  }
+
+  private companion object {
+    const val DEFAULT_FRAME_NANOS = 16_666_667L
+    const val MIN_FRAME_NANOS = 4_000_000L
+    const val NOT_MEASURED = -1.0
+    const val NO_WINDOW = -2.0
   }
 }
 

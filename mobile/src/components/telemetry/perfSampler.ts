@@ -16,6 +16,8 @@ export interface PerfSamples {
 }
 
 const MEMORY_POINTS = 30;
+/** `getJsFrameRate` value meaning the platform doesn't measure JS frames natively (iOS). */
+const JS_NOT_NATIVE = -1;
 const EMPTY: PerfSamples = { uiFps: null, jsFps: null, memoryMb: [], nativeAvailable: PerfMonitor !== null };
 
 type Listener = () => void;
@@ -107,11 +109,15 @@ class PerfSampler {
       jsFrames = 0;
       last = now;
       const ui = callNative((m) => m.getUiFrameRate());
-      const nativeJs = callNative((m) => m.getJsFrameRate());
+      // A native build from before getJsFrameRate existed: treat it as "not measured natively"
+      // rather than letting the TypeError switch off every native reading.
+      const nativeJs = callNative((m) => (typeof m.getJsFrameRate === 'function' ? m.getJsFrameRate() : JS_NOT_NATIVE));
       let jsFps: number | null;
-      if (nativeJs !== null && nativeJs >= 0) {
+      if (nativeJs !== null && nativeJs !== JS_NOT_NATIVE) {
         stopRaf();
-        jsFps = nativeJs > 0 ? Math.round(nativeJs) : null;
+        // Before the first native window completes there is no reading yet; a real 0 (the JS
+        // thread served no frames for a whole window) is shown as 0.
+        jsFps = nativeJs >= 0 ? Math.round(nativeJs) : null;
       } else if (rafRunning) {
         jsFps = rafFps;
       } else {
@@ -122,7 +128,9 @@ class PerfSampler {
       const bytes = callNative((m) => m.getMemoryFootprintBytes());
       this.publish({
         jsFps,
-        ...(ui !== null ? { uiFps: ui > 0 ? Math.round(ui) : null } : {}),
+        // A later call in this tick may have switched native readings off; don't write back a
+        // UI rate that callNative just cleared.
+        ...(ui !== null && native !== null ? { uiFps: ui > 0 ? Math.round(ui) : null } : {}),
         ...(bytes !== null && bytes > 0
           ? { memoryMb: [...this.snapshot.memoryMb.slice(-(MEMORY_POINTS - 1)), bytes / (1024 * 1024)] }
           : {}),

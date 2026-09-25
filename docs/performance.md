@@ -67,7 +67,7 @@ The app was measured on release builds only. Debug builds carry React Native's d
   - Device: Pixel 10 Pro emulator, API 37, 60 Hz, host-GPU rendering on an Apple M4 Pro.
   - Tool: `dumpsys gfxinfo` over a 60 s window per screen.
   - Control: each capture is bracketed by scrolling the system Settings app. A capture counts only if the controls on both sides are clean.
-  - JS thread: the Telemetry counter's per-frame probe. Each UI frame posts one task to the JS thread's queue; the frame counts if the JS thread runs it within that frame. Readings are the performance overlay, six samples 5 s apart.
+  - JS thread: the Telemetry counter's per-frame probe. Each UI frame posts one task to the JS thread's queue; the frame counts if the JS thread runs it within one frame period of being posted. The reading is JS-served frames among UI frames, so it can't exceed the UI rate. Readings are the performance overlay, six samples 5 s apart.
 - **iOS:**
   - Build: Release configuration on the iOS 27 simulator (iPhone 18 Pro).
   - Memory: `footprint` (`phys_footprint`, the figure Xcode reports).
