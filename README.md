@@ -14,7 +14,7 @@ A real-time crypto market viewer in two parts:
 | [docs/design.md](docs/design.md) | Architecture, data flow, decision records with the alternatives rejected, scaling design |
 | [docs/requirements.md](docs/requirements.md) | Each brief requirement → where it is implemented → how it is verified |
 | [docs/tasks.md](docs/tasks.md) | The task backlog, by phase; task IDs appear in commit messages |
-| [docs/specs/](docs/specs/README.md) | The change spec behind each phase from Phase 9 on |
+| [docs/specs/](docs/specs/README.md) | Detailed change specs: intent, edge-case matrix and review log |
 
 **Stack.** npm workspaces monorepo:
 - `shared`: the protocol and REST schemas (zod), used by both sides.
@@ -152,30 +152,42 @@ Build targets and the deterministic synthetic feed are described in [mobile/.mae
 
 ## 4. Architecture
 
-```
-               Binance: <pair>@depth20@100ms · <pair>@aggTrade · <pair>@ticker (WS)
-                        exchangeInfo · ticker/24hr (REST, at startup; exchangeInfo hourly)
-                                              │
-┌─────────────────────────────── Gateway: Node 22, Fastify 5 + ws ───────────────────────────────┐
-│  BinanceConnector ──► OrderBookManager · MetadataService       (versioned last-value caches)   │
-│   (backoff, watchdog)            │                FreshnessMonitor ──► status                  │
-│                                  ▼ every FLUSH_INTERVAL_MS (100 ms)                            │
-│                             ChannelHub ──► ClientSession × N                                   │
-│                  (serialize each changed item once)   (channels, cadence, last-sent versions,  │
-│                                                         backpressure, rate limit)              │
-│  :8080  /ws · /pairs/meta · /health · /ready                    :9464  /metrics (internal)     │
-└────────────────────────────────────────────────────────────────────────────────────────────────┘
-          │ JSON frames {v, tick, ts, msgs[]}: hello, status, tickers, book, ack, … │ GET /pairs/meta
-          ▼                                                                         ▼
-┌──────────────────────────────── App: Expo SDK 57, React Native 0.86 ───────────────────────────┐
-│  MarketStreamClient ──► MarketIngestor ──► zustand store ──► per-pair selectors ──► screens    │
-│  (state machine: backoff,   (≤ 1 commit per              (one pair's update doesn't            │
-│   NetInfo, AppState,         animation frame)              re-render another)                  │
-│   watchdog, resubscribe)                                                                       │
-│  TanStack Query: /pairs/meta, pull-to-refresh        MMKV (SQLite in Expo Go): favourites,     │
-│  perf-monitor (Swift/Kotlin): memory, UI FPS          settings, last-seen market snapshot      │
-│  Tabs: Terminal · Markets · Telemetry · Settings; drawer with static account screens           │
-└────────────────────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph BIN["Binance"]
+    WS["WebSocket streams<br/>depth20@100ms · aggTrade · ticker"]
+    REST["REST<br/>exchangeInfo · ticker/24hr"]
+  end
+  subgraph GW["Gateway: Node 22, Fastify 5 + ws"]
+    BC["BinanceConnector<br/>backoff · watchdog"]
+    BOOT["MetadataBootstrap<br/>at startup; exchangeInfo hourly"]
+    LVC["OrderBookManager · MetadataService<br/>versioned last-value caches"]
+    FM["FreshnessMonitor<br/>status: live · stale · down"]
+    HUB["ChannelHub<br/>every 100 ms: serialize each changed item once"]
+    CS["ClientSession × N<br/>channels · cadence · backpressure · rate limit"]
+    HTTP["HTTP :8080<br/>/pairs/meta · /health · /ready"]
+    MET["Metrics :9464 (internal)"]
+  end
+  subgraph APP["App: Expo SDK 57, React Native 0.86"]
+    SC["MarketStreamClient<br/>backoff · NetInfo · AppState · watchdog"]
+    ING["MarketIngestor<br/>at most 1 commit per animation frame"]
+    ST["zustand store<br/>per-pair selectors"]
+    UI["Screens<br/>Terminal · Markets · Telemetry · Settings"]
+    Q["TanStack Query<br/>pairs metadata · pull-to-refresh"]
+    MM["MMKV<br/>favourites · settings · last-seen snapshot"]
+    PM["perf-monitor (Swift / Kotlin)<br/>memory · UI FPS"]
+  end
+  WS --> BC --> LVC
+  REST --> BOOT --> LVC
+  LVC --> FM --> HUB
+  LVC --> HUB --> CS
+  LVC --> HTTP
+  CS -- "WebSocket /ws: JSON frames<br/>hello · status · tickers · book" --> SC
+  HTTP -- "GET /pairs/meta" --> Q
+  SC --> ING --> ST --> UI
+  Q --> UI
+  ST <--> MM
+  PM --> UI
 ```
 
 Each screen subscribes only to what it shows: the watchlist to `tickers`, the terminal to `tickers` plus one `book:<PAIR>`. The zod schemas in `shared/src/protocol.ts` define the protocol for both sides. The gateway validates client commands with them; the app checks incoming frames with lightweight hand-written guards (the per-tick path) and uses zod for REST responses and stored snapshots. Details: [docs/design.md](docs/design.md) and [docs/protocol.md](docs/protocol.md).
@@ -268,7 +280,7 @@ Beyond capacity, production needs a standby ingestion connection (Binance limits
 
 **Tools.** Gemini for the initial phases (1–8). Claude Code (Anthropic) for phases 9–15 and for code review.
 
-**Method (BMAD).** Each phase from 9 on started as a spec with a frozen intent ([docs/specs/](docs/specs/README.md)). An agent implemented it; independent AI review passes ran in parallel (the diff read without context, edge-case path tracing, and claims that lack a test); a human triaged every finding. Changes were verified on both simulators with Maestro and with frame and memory measurements, and a human decided at every checkpoint and PR.
+**Method (BMAD, spec-driven).** The project started from a spec: requirements, design and a phased task backlog in `docs/` (the first commit), with task IDs carried into commit messages. An agent implemented each phase against its tasks, and every phase reached `main` through a pull request. As the work grew, each phase also got a detailed change spec with a frozen intent, an edge-case matrix and a review log ([docs/specs/](docs/specs/README.md)). Independent AI review passes ran in parallel (the diff read without context, edge-case path tracing, and claims that lack a test), and a human triaged every finding. Changes were verified on both simulators, with Maestro and with frame and memory measurements, and a human decided at every checkpoint and PR.
 
 **Defects caught by review or testing**, among others:
 - The `perf-monitor` native sources were excluded by broad `ios/` / `android/` ignore rules.

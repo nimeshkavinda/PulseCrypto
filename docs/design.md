@@ -148,15 +148,16 @@ The README has the [full diagram](../README.md#4-architecture). Components:
 
 **Shape at scale:**
 
-```
-Binance ──► ingestion service (active + standby) ──► internal pub/sub (versioned last values per item)
-                                                            │
-                         ┌──────────────────────────────────┼──────────────────────────────────┐
-                         ▼                                  ▼                                  ▼
-               region A gateway replicas          region B gateway replicas          region C gateway replicas
-               (ChannelHub, stateless)            (ChannelHub, stateless)            (ChannelHub, stateless)
-                         ▲                                  ▲                                  ▲
-                    clients (TLS and auth terminated at a regional load balancer)
+```mermaid
+flowchart TB
+  B["Binance"] --> I["Ingestion service<br/>active + standby"]
+  I --> P["Internal pub/sub<br/>versioned last value per item"]
+  P --> GA["Region A gateway replicas<br/>ChannelHub, stateless"]
+  P --> GB["Region B gateway replicas<br/>ChannelHub, stateless"]
+  P --> GC["Region C gateway replicas<br/>ChannelHub, stateless"]
+  CA["Clients"] --> LA["Regional load balancer<br/>TLS · auth"] --> GA
+  CB["Clients"] --> LB["Regional load balancer<br/>TLS · auth"] --> GB
+  CC["Clients"] --> LC["Regional load balancer<br/>TLS · auth"] --> GC
 ```
 
 - **Ingestion:** one active connection to Binance per upstream stream set, with a standby. It publishes each item's latest version; it doesn't fan out to clients.
